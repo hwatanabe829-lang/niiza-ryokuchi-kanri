@@ -232,6 +232,28 @@
     margin-bottom: 8px;
     display: none;
   }
+  #detail h4 { font-size: 13px; margin: 10px 0 6px; color: var(--green); }
+  .field input[type="checkbox"] { width: auto; }
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .checkbox-field label { margin: 0; font-size: 13px; color: #333; }
+  .env-tax-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: #c8e6c9;
+    color: #1b5e20;
+  }
+  .item-total {
+    text-align: right;
+    font-size: 12px;
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -289,6 +311,19 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
+  <h3>📅 対象年度</h3>
+  <div class="field">
+    <label>この緑地で表示・編集する年度</label>
+    <select id="yearSelect"></select>
+  </div>
+  <div class="row2">
+    <div class="field"><input type="number" id="newYearInput" placeholder="例: 2027"></div>
+    <div class="field"><button id="btnAddYear" style="width:100%;">年度を追加</button></div>
+  </div>
+  <small class="help">緑地ごとに別々の年度を管理できます。予算・作業記録はここで選んだ年度に紐づきます。</small>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
   <h3>📄 敷地図（PDF）にプロット</h3>
   <div class="pdf-wrap">
     <div class="field">
@@ -308,27 +343,17 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>年度別 予算</h3>
+  <h3><span id="budgetYearLabel">-</span>年度の予算</h3>
   <div id="budgetList"></div>
-  <div class="row2">
-    <div class="field"><label>年度</label><input type="number" id="budgetYear" placeholder="2026"></div>
-    <div class="field"><label>予算額（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
-  </div>
-  <button id="btnSetBudget">予算を設定/更新</button>
+  <div class="field"><label>予算額（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
+  <button id="btnSetBudget">この年度の予算を設定/更新</button>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>保全作業記録の追加</h3>
+  <h3>保全作業記録の追加（<span id="recordYearLabel">-</span>年度）</h3>
   <div class="editing-banner" id="editingBanner">✏️ この記録を編集中です（保存すると上書きされます）</div>
   <div class="row2">
-    <div class="field"><label>年度</label><input type="number" id="recYear" placeholder="2026"></div>
     <div class="field"><label>実施日</label><input type="date" id="recDate"></div>
-  </div>
-  <div class="row2">
-    <div class="field">
-      <label>作業種別</label>
-      <select id="recType"></select>
-    </div>
     <div class="field">
       <label>進捗状況</label>
       <select id="recStatus"></select>
@@ -338,21 +363,39 @@
     <div class="field"><label>入力者</label><input type="text" id="recInputBy" placeholder="例：環境課 田中"></div>
     <div class="field"><label>発注担当者</label><input type="text" id="recOrderManager" placeholder="例：〇〇造園 鈴木"></div>
   </div>
-  <div class="row2">
-    <div class="field"><label>実施業者</label><input type="text" id="recContractor" placeholder="〇〇造園株式会社"></div>
-    <div class="field"><label>費用（円）</label><input type="number" id="recCost" placeholder="120000"></div>
+  <div class="field"><label>実施業者</label><input type="text" id="recContractor" placeholder="〇〇造園株式会社"></div>
+  <div class="checkbox-field">
+    <input type="checkbox" id="recEnvTax">
+    <label for="recEnvTax">🌲 環境譲与税案件</label>
   </div>
   <div class="field">
     <label>作業前の写真</label>
     <input type="file" id="recPhoto" accept="image/*">
     <img id="recPhotoPreview" class="photo-thumb" style="display:none;">
   </div>
-  <button id="btnAddRecord">記録を追加</button>
+
+  <h4>作業項目（複数追加できます）</h4>
+  <div class="field">
+    <label>種別</label>
+    <select id="itemType"></select>
+  </div>
+  <div class="row2">
+    <div class="field" id="itemQtyWrap"></div>
+    <div class="field"><label>費用（円）</label><input type="number" id="itemCost" placeholder="80000"></div>
+  </div>
+  <button id="btnAddItem" style="width:100%; margin-bottom:10px;">＋ 項目を追加</button>
+  <div id="itemListWrap"></div>
+
+  <button id="btnAddRecord" style="margin-top:10px;">記録を追加</button>
   <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>作業履歴</h3>
+  <div class="checkbox-field">
+    <input type="checkbox" id="showAllYears">
+    <label for="showAllYears">すべての年度を表示</label>
+  </div>
   <div id="recordTableWrap"></div>
 </div>
 
@@ -415,11 +458,13 @@ map.on('click', (e) => {
   if (!addMode) return;
   const name = prompt('緑地名を入力してください', '新しい緑地');
   if (!name) return;
+  const thisYear = new Date().getFullYear();
   const gs = {
     id: uid(), name,
     lat: e.latlng.lat, lng: e.latlng.lng,
     memo: '', budgets: {}, records: [],
-    pdf: null, pdfName: null, pdfPins: []
+    pdf: null, pdfName: null, pdfPins: [],
+    years: [thisYear], selectedYear: thisYear
   };
   data.push(gs);
   save();
@@ -502,12 +547,36 @@ document.getElementById('btnAddType').addEventListener('click', () => {
   if (!types.includes(v)) types.push(v);
   saveTypes(); input.value = ''; renderTypeTags(); renderRecTypeSelect();
 });
+
+// ---- Work item type select (used when building work items for a record) ----
 function renderRecTypeSelect() {
-  const sel = document.getElementById('recType');
+  const sel = document.getElementById('itemType');
   const prev = sel.value;
   sel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-  if (types.includes(prev)) sel.value = prev;
+  sel.value = types.includes(prev) ? prev : types[0];
+  renderItemQtyFields(sel.value);
 }
+
+// Each work type has a natural unit: 草刈り/清掃→㎡、剪定→強剪定/弱剪定+本数、伐採→本。
+// Custom/other types fall back to a free quantity + unit field.
+function renderItemQtyFields(typeVal) {
+  const wrap = document.getElementById('itemQtyWrap');
+  if (typeVal === '草刈り' || typeVal === '清掃') {
+    wrap.innerHTML = `<label>面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
+  } else if (typeVal === '剪定') {
+    wrap.innerHTML = `<label>剪定の種類・本数</label>
+      <select id="itemSubType"><option value="強剪定">強剪定</option><option value="弱剪定">弱剪定</option></select>
+      <input type="number" id="itemQty" placeholder="本数（本）" style="margin-top:4px;">`;
+  } else if (typeVal === '伐採') {
+    wrap.innerHTML = `<label>本数（本）</label><input type="number" id="itemQty" placeholder="例: 5">`;
+  } else {
+    wrap.innerHTML = `<label>数量・単位</label>
+      <input type="number" id="itemQty" placeholder="数量" style="margin-bottom:4px;">
+      <input type="text" id="itemUnit" placeholder="単位（例: 本, ㎡, 回）">`;
+  }
+}
+
+document.getElementById('itemType').addEventListener('change', (e) => renderItemQtyFields(e.target.value));
 
 // ---- Status tags ----
 function renderStatusTags() {
@@ -541,6 +610,52 @@ function renderRecStatusSelect() {
 // ---- Detail panel ----
 function getGreen(id) { return data.find(g => g.id === id); }
 
+// ---- Fiscal year management (per green space) ----
+function ensureYears(gs) {
+  if (!gs.years || gs.years.length === 0) {
+    gs.years = [new Date().getFullYear()];
+  }
+  if (!gs.selectedYear || !gs.years.includes(gs.selectedYear)) {
+    gs.selectedYear = gs.years.slice().sort((a, b) => b - a)[0];
+  }
+}
+
+function renderYearSelect(gs) {
+  ensureYears(gs);
+  const sel = document.getElementById('yearSelect');
+  sel.innerHTML = gs.years.slice().sort((a, b) => b - a)
+    .map(y => `<option value="${y}" ${y === gs.selectedYear ? 'selected' : ''}>${y}年度</option>`).join('');
+  document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
+  document.getElementById('recordYearLabel').textContent = gs.selectedYear;
+}
+
+document.getElementById('yearSelect').addEventListener('change', (e) => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  gs.selectedYear = Number(e.target.value);
+  save();
+  document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
+  document.getElementById('recordYearLabel').textContent = gs.selectedYear;
+  renderBudgetList(gs);
+  renderRecordTable(gs);
+});
+
+document.getElementById('btnAddYear').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const input = document.getElementById('newYearInput');
+  const y = parseInt(input.value, 10);
+  if (!y || y < 2000 || y > 2100) { alert('正しい年度を入力してください'); return; }
+  ensureYears(gs);
+  if (!gs.years.includes(y)) gs.years.push(y);
+  gs.selectedYear = y;
+  save();
+  input.value = '';
+  renderYearSelect(gs);
+  renderBudgetList(gs);
+  renderRecordTable(gs);
+});
+
 function openDetail(id) {
   currentId = id;
   const gs = getGreen(id);
@@ -550,6 +665,7 @@ function openDetail(id) {
   document.getElementById('detailName').textContent = gs.name;
   document.getElementById('editName').value = gs.name;
   document.getElementById('editMemo').value = gs.memo || '';
+  renderYearSelect(gs);
   renderBudgetList(gs);
   renderRecordTable(gs);
   renderPdfSection(gs);
@@ -581,37 +697,33 @@ document.getElementById('btnDeleteGreen').addEventListener('click', () => {
   renderAll();
 });
 
-// ---- Budget ----
+// ---- Budget (scoped to the green space's currently selected fiscal year) ----
 function renderBudgetList(gs) {
   const wrap = document.getElementById('budgetList');
-  const years = Object.keys(gs.budgets).sort((a, b) => b - a);
-  if (years.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">予算未設定</div>';
+  const y = gs.selectedYear;
+  const budget = gs.budgets[y];
+  const spent = gs.records.filter(r => String(r.year) === String(y))
+    .reduce((s, r) => s + Number(r.cost || 0), 0);
+  if (budget == null) {
+    wrap.innerHTML = `<div class="empty-msg">${y}年度の予算は未設定です（支出合計: ¥${spent.toLocaleString()}）</div>`;
     return;
   }
-  wrap.innerHTML = years.map(y => {
-    const budget = gs.budgets[y];
-    const spent = gs.records.filter(r => String(r.year) === String(y))
-      .reduce((s, r) => s + Number(r.cost || 0), 0);
-    const remain = budget - spent;
-    return `<div class="budget-line">
-      <div><b>${y}年度</b> 予算: ¥${Number(budget).toLocaleString()}</div>
-      <div>支出合計: ¥${spent.toLocaleString()}</div>
-      <div class="remain ${remain < 0 ? 'over' : ''}">残額: ¥${remain.toLocaleString()} ${remain < 0 ? '（予算超過）' : ''}</div>
-    </div>`;
-  }).join('');
+  const remain = budget - spent;
+  wrap.innerHTML = `<div class="budget-line">
+    <div>予算: ¥${Number(budget).toLocaleString()}</div>
+    <div>支出合計: ¥${spent.toLocaleString()}</div>
+    <div class="remain ${remain < 0 ? 'over' : ''}">残額: ¥${remain.toLocaleString()} ${remain < 0 ? '（予算超過）' : ''}</div>
+  </div>`;
 }
 
 document.getElementById('btnSetBudget').addEventListener('click', () => {
   const gs = getGreen(currentId);
   if (!gs) return;
-  const year = document.getElementById('budgetYear').value;
   const amount = document.getElementById('budgetAmount').value;
-  if (!year || amount === '') { alert('年度と予算額を入力してください'); return; }
-  gs.budgets[year] = Number(amount);
+  if (amount === '') { alert('予算額を入力してください'); return; }
+  gs.budgets[gs.selectedYear] = Number(amount);
   save();
   renderBudgetList(gs);
-  document.getElementById('budgetYear').value = '';
   document.getElementById('budgetAmount').value = '';
 });
 
@@ -628,22 +740,75 @@ document.getElementById('recPhoto').addEventListener('change', (e) => {
   reader.readAsDataURL(file);
 });
 
+// ---- Work items (multiple per record: e.g. 草刈り100㎡ + 剪定3本 in one order) ----
+let currentItems = [];
+
+function renderItemListWrap() {
+  const wrap = document.getElementById('itemListWrap');
+  if (currentItems.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">作業項目がまだありません</div>';
+    return;
+  }
+  let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th></th></tr>';
+  currentItems.forEach((it, idx) => {
+    const typeLabel = it.subType ? `${escapeHtml(it.type)}（${escapeHtml(it.subType)}）` : escapeHtml(it.type);
+    const qtyLabel = it.qty != null ? `${it.qty}${escapeHtml(it.unit || '')}` : (it.unit ? escapeHtml(it.unit) : '-');
+    html += `<tr><td>${typeLabel}</td><td>${qtyLabel}</td><td>¥${Number(it.cost).toLocaleString()}</td>
+      <td><button class="danger" data-rm-item="${idx}">削除</button></td></tr>`;
+  });
+  const total = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
+  html += `</table><div class="item-total">項目合計: ¥${total.toLocaleString()}</div>`;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('button[data-rm-item]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentItems.splice(Number(btn.dataset.rmItem), 1);
+      renderItemListWrap();
+    });
+  });
+}
+
+document.getElementById('btnAddItem').addEventListener('click', () => {
+  const type = document.getElementById('itemType').value;
+  const subTypeEl = document.getElementById('itemSubType');
+  const unitEl = document.getElementById('itemUnit');
+  const qtyEl = document.getElementById('itemQty');
+  const cost = document.getElementById('itemCost').value;
+  if (!type || cost === '') { alert('種別と費用は必須です'); return; }
+  let unit = '';
+  if (type === '草刈り' || type === '清掃') unit = '㎡';
+  else if (type === '伐採' || type === '剪定') unit = '本';
+  else unit = unitEl ? unitEl.value.trim() : '';
+  currentItems.push({
+    id: uid(),
+    type,
+    subType: subTypeEl ? subTypeEl.value : '',
+    qty: qtyEl && qtyEl.value !== '' ? Number(qtyEl.value) : null,
+    unit,
+    cost: Number(cost)
+  });
+  renderItemListWrap();
+  document.getElementById('itemCost').value = '';
+  if (qtyEl) qtyEl.value = '';
+});
+
 function resetRecordForm() {
   editingRecordId = null;
+  currentItems = [];
   document.getElementById('editingBanner').style.display = 'none';
   document.getElementById('btnAddRecord').textContent = '記録を追加';
   document.getElementById('btnCancelEdit').style.display = 'none';
-  document.getElementById('recYear').value = '';
   document.getElementById('recDate').value = '';
   document.getElementById('recContractor').value = '';
-  document.getElementById('recCost').value = '';
   document.getElementById('recInputBy').value = '';
   document.getElementById('recOrderManager').value = '';
+  document.getElementById('recEnvTax').checked = false;
   document.getElementById('recPhoto').value = '';
   document.getElementById('recPhotoPreview').style.display = 'none';
   document.getElementById('recPhotoPreview').src = '';
+  document.getElementById('itemCost').value = '';
   renderRecTypeSelect();
   renderRecStatusSelect();
+  renderItemListWrap();
 }
 
 document.getElementById('btnCancelEdit').addEventListener('click', resetRecordForm);
@@ -651,35 +816,35 @@ document.getElementById('btnCancelEdit').addEventListener('click', resetRecordFo
 document.getElementById('btnAddRecord').addEventListener('click', () => {
   const gs = getGreen(currentId);
   if (!gs) return;
-  const year = document.getElementById('recYear').value;
   const date = document.getElementById('recDate').value;
-  const type = document.getElementById('recType').value;
   const status = document.getElementById('recStatus').value;
   const inputBy = document.getElementById('recInputBy').value.trim();
   const orderManager = document.getElementById('recOrderManager').value.trim();
   const contractor = document.getElementById('recContractor').value.trim();
-  const cost = document.getElementById('recCost').value;
+  const envTax = document.getElementById('recEnvTax').checked;
   const photoImg = document.getElementById('recPhotoPreview');
   const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
 
-  if (!year || !date || !type) {
-    alert('年度・実施日・作業種別は必須です');
+  if (!date || currentItems.length === 0) {
+    alert('実施日と、少なくとも1件の作業項目は必須です');
     return;
   }
+  const cost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
 
   if (editingRecordId) {
     const r = gs.records.find(x => x.id === editingRecordId);
     if (r) {
-      r.year = year; r.date = date; r.type = type; r.status = status;
+      r.year = gs.selectedYear; r.date = date; r.status = status;
       r.inputBy = inputBy; r.orderManager = orderManager;
-      r.contractor = contractor; r.cost = Number(cost || 0);
+      r.contractor = contractor; r.envTax = envTax;
+      r.items = currentItems.slice(); r.cost = cost;
       if (photo) r.photo = photo;
     }
   } else {
     gs.records.push({
-      id: uid(), year, date, type, status,
-      inputBy, orderManager, contractor,
-      cost: Number(cost || 0), photo
+      id: uid(), year: gs.selectedYear, date, status,
+      inputBy, orderManager, contractor, envTax,
+      items: currentItems.slice(), cost, photo
     });
   }
   save();
@@ -693,39 +858,56 @@ function editRecord(gs, recId) {
   const r = gs.records.find(x => x.id === recId);
   if (!r) return;
   editingRecordId = recId;
+  if (!gs.years.includes(r.year)) { gs.years.push(r.year); }
+  gs.selectedYear = r.year;
+  save();
+  renderYearSelect(gs);
   document.getElementById('editingBanner').style.display = 'block';
   document.getElementById('btnAddRecord').textContent = '記録を更新';
   document.getElementById('btnCancelEdit').style.display = 'inline-block';
-  document.getElementById('recYear').value = r.year;
   document.getElementById('recDate').value = r.date;
-  renderRecTypeSelect(); document.getElementById('recType').value = r.type;
   renderRecStatusSelect(); document.getElementById('recStatus').value = r.status || statuses[0];
   document.getElementById('recInputBy').value = r.inputBy || '';
   document.getElementById('recOrderManager').value = r.orderManager || '';
   document.getElementById('recContractor').value = r.contractor || '';
-  document.getElementById('recCost').value = r.cost;
+  document.getElementById('recEnvTax').checked = !!r.envTax;
+  currentItems = (r.items || []).map(it => ({ ...it }));
+  renderItemListWrap();
   const img = document.getElementById('recPhotoPreview');
   if (r.photo) { img.src = r.photo; img.style.display = 'block'; }
   else { img.style.display = 'none'; img.src = ''; }
-  document.getElementById('recYear').scrollIntoView({behavior:'smooth', block:'center'});
+  renderBudgetList(gs);
+  renderRecordTable(gs);
+  document.getElementById('recDate').scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 function renderRecordTable(gs) {
   const wrap = document.getElementById('recordTableWrap');
-  if (gs.records.length === 0) {
+  const showAll = document.getElementById('showAllYears').checked;
+  const filtered = showAll ? gs.records : gs.records.filter(r => String(r.year) === String(gs.selectedYear));
+  if (filtered.length === 0) {
     wrap.innerHTML = '<div class="empty-msg">記録がありません</div>';
     return;
   }
-  const sorted = gs.records.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
+  const sorted = filtered.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
   let html = `<table><tr>
-    <th>年度</th><th>日付</th><th>種別</th><th>進捗</th><th>業者</th>
+    <th>年度</th><th>日付</th><th>作業内容</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
     <th>入力者</th><th>発注担当</th><th>費用</th><th>写真</th><th></th>
   </tr>`;
   sorted.forEach(r => {
+    const items = r.items || [];
+    const itemsLabel = items.length
+      ? items.map(it => {
+          const t = it.subType ? `${it.type}(${it.subType})` : it.type;
+          const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
+          return escapeHtml(t + (q ? ' ' + q : ''));
+        }).join('、')
+      : escapeHtml(r.type || '-');
     html += `<tr>
       <td>${escapeHtml(r.year)}</td>
       <td>${escapeHtml(r.date)}</td>
-      <td>${escapeHtml(r.type)}</td>
+      <td>${itemsLabel}</td>
+      <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
       <td>
         <select class="status-select" data-id="${r.id}">
           ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s===r.status?'selected':''}>${escapeHtml(s)}</option>`).join('')}
@@ -769,6 +951,11 @@ function renderRecordTable(gs) {
     });
   });
 }
+
+document.getElementById('showAllYears').addEventListener('change', () => {
+  const gs = getGreen(currentId);
+  if (gs) renderRecordTable(gs);
+});
 
 document.getElementById('photoModal').addEventListener('click', () => {
   document.getElementById('photoModal').style.display = 'none';
