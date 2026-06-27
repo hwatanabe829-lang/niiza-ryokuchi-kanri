@@ -200,6 +200,7 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.5);
     cursor: pointer;
   }
+  .pdf-pin.tree { background: #2e7d32; }
   .pdf-pin-label {
     position: absolute;
     transform: translate(-50%, -100%);
@@ -322,6 +323,28 @@
     margin-bottom: 8px;
   }
   .envtax-box .budget-amounts { font-size: 18px; }
+
+  .tree-marker-icon {
+    font-size: 20px;
+    line-height: 1;
+    text-align: center;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  }
+  .tree-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 6px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .tree-item label { display: flex; align-items: center; gap: 4px; flex: 1; margin: 0; }
+  .tree-item input[type="checkbox"] { width: auto; }
+  .tree-item.felled { opacity: 0.6; text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -419,6 +442,13 @@
   <button id="btnSaveInfo">基本情報を保存</button>
   <button class="outline" id="btnRepositionMap">🗺️ 地図上の位置を設定/変更</button>
   <button class="danger" id="btnDeleteGreen">この緑地を削除</button>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>🌳 伐採予定の木</h3>
+  <button class="outline" id="btnAddTreeMode" style="width:100%; margin-bottom:8px;">📍 地図クリックで伐採予定の木を追加</button>
+  <div id="treeMarkerList"></div>
+  <small class="help">地図上のマーカーをクリックすると、緑地の場所と同じ地図に🌳マークで表示されます。伐採が済んだらチェックを入れてください。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -560,10 +590,12 @@ let envTaxSelectedYear = new Date().getFullYear();
 
 let addMode = false;            // create new green space via map click
 let repositionTargetId = null;  // move existing green space's map pin
+let treeAddMode = null;         // green space id to attach a new 伐採予定の木 marker to, via map click
 let currentId = null;
 let editingRecordId = null;
 let pinAddMode = false;
 let markers = {};
+let treeMarkers = {};
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(types)); }
@@ -578,10 +610,11 @@ function escapeHtml(s) {
 }
 
 // ---- Map ----
-const map = L.map('map').setView(NIIZA_CENTER, 14);
+const map = L.map('map', { zoomSnap: 0.5, zoomDelta: 0.5, maxZoom: 22, minZoom: 4 }).setView(NIIZA_CENTER, 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
-  maxZoom: 19
+  maxZoom: 19,
+  maxNativeZoom: 19
 }).addTo(map);
 
 map.on('click', (e) => {
@@ -598,6 +631,22 @@ map.on('click', (e) => {
     document.getElementById('btnRepositionMap').textContent = '🗺️ 地図上の位置を設定/変更';
     return;
   }
+  if (treeAddMode) {
+    const gs = getGreen(treeAddMode);
+    if (gs) {
+      const label = prompt('木の名称・説明を入力してください', '伐採予定の木');
+      if (label) {
+        if (!gs.treeMarkers) gs.treeMarkers = [];
+        gs.treeMarkers.push({ id: uid(), lat: e.latlng.lat, lng: e.latlng.lng, label, felled: false });
+        save();
+        renderTreeMarkers();
+        if (currentId === gs.id) renderTreeMarkerList(gs);
+      }
+    }
+    treeAddMode = null;
+    document.getElementById('btnAddTreeMode').textContent = '📍 地図クリックで伐採予定の木を追加';
+    return;
+  }
   if (!addMode) return;
   const name = prompt('緑地名を入力してください', '新しい緑地');
   if (!name) return;
@@ -607,6 +656,7 @@ map.on('click', (e) => {
     lat: e.latlng.lat, lng: e.latlng.lng,
     memo: '', budgets: {}, records: [],
     pdf: null, pdfName: null, pdfPins: [],
+    treeMarkers: [],
     years: [thisYear], selectedYear: thisYear,
     displayBudgetCategory: budgetCategories[0] || '通常予算'
   };
@@ -642,6 +692,69 @@ function renderMarkers() {
     marker.bindTooltip(gs.name);
     marker.on('click', () => openDetail(gs.id));
     markers[gs.id] = marker;
+  });
+}
+
+// ---- 伐採予定の木 markers (shown on the main map across all green spaces) ----
+function treeIcon(felled) {
+  return L.divIcon({
+    className: 'tree-marker-icon',
+    html: felled ? '✅' : '🌳',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+}
+function renderTreeMarkers() {
+  Object.values(treeMarkers).forEach(m => map.removeLayer(m));
+  treeMarkers = {};
+  data.forEach(gs => {
+    (gs.treeMarkers || []).forEach(t => {
+      const marker = L.marker([t.lat, t.lng], { icon: treeIcon(t.felled) }).addTo(map);
+      marker.bindTooltip(`${gs.name}：${t.label}${t.felled ? '（伐採済み）' : '（伐採予定）'}`);
+      marker.on('click', () => openDetail(gs.id));
+      treeMarkers[t.id] = marker;
+    });
+  });
+}
+
+document.getElementById('btnAddTreeMode').addEventListener('click', () => {
+  if (!currentId) return;
+  treeAddMode = treeAddMode ? null : currentId;
+  document.getElementById('btnAddTreeMode').textContent = treeAddMode
+    ? '🖱️ 地図上をクリックして伐採予定の木を配置...（再クリックでキャンセル）'
+    : '📍 地図クリックで伐採予定の木を追加';
+});
+
+function renderTreeMarkerList(gs) {
+  const wrap = document.getElementById('treeMarkerList');
+  const list = gs.treeMarkers || [];
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">伐採予定の木はまだ登録されていません</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(t => `
+    <div class="tree-item${t.felled ? ' felled' : ''}">
+      <label>
+        <input type="checkbox" data-felled="${t.id}" ${t.felled ? 'checked' : ''}>
+        🌳 ${escapeHtml(t.label)}
+      </label>
+      <button class="danger" data-del-tree="${t.id}">削除</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('input[data-felled]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const t = gs.treeMarkers.find(x => x.id === cb.dataset.felled);
+      if (t) { t.felled = cb.checked; save(); renderTreeMarkers(); renderTreeMarkerList(gs); }
+    });
+  });
+  wrap.querySelectorAll('button[data-del-tree]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この木のマーカーを削除しますか？')) return;
+      gs.treeMarkers = gs.treeMarkers.filter(t => t.id !== btn.dataset.delTree);
+      save();
+      renderTreeMarkers();
+      renderTreeMarkerList(gs);
+    });
   });
 }
 
@@ -992,12 +1105,16 @@ function openDetail(id) {
   renderBudgetCard(gs);
   renderRecordTable(gs);
   renderPdfSection(gs);
+  renderTreeMarkerList(gs);
+  treeAddMode = null;
+  document.getElementById('btnAddTreeMode').textContent = '📍 地図クリックで伐採予定の木を追加';
   renderGreenList();
 }
 
 document.getElementById('btnCloseDetail').addEventListener('click', () => {
   document.getElementById('detail').style.display = 'none';
   currentId = null;
+  treeAddMode = null;
   renderGreenList();
 });
 
@@ -1405,7 +1522,7 @@ function renderPdfPins(gs) {
   layer.innerHTML = '';
   (gs.pdfPins || []).forEach(p => {
     const pin = document.createElement('div');
-    pin.className = 'pdf-pin';
+    pin.className = 'pdf-pin' + (p.label.includes('伐採') ? ' tree' : '');
     pin.style.left = p.x + '%';
     pin.style.top = p.y + '%';
     pin.title = p.label;
@@ -1467,6 +1584,7 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
 
 function renderAll() {
   renderMarkers();
+  renderTreeMarkers();
   renderGreenList();
   renderTypeTags();
   renderRecTypeSelect();
