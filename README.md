@@ -5,7 +5,7 @@
 
 ## 使い方
 
-[GitHub Pages で開く](https://REPLACE_ME.github.io/niiza-ryokuchi-kanri/) ※公開後にURLが決まります
+[GitHub Pages で開く](https://hwatanabe829-lang.github.io/niiza-ryokuchi-kanri/)
 
 または `index.html` をブラウザで直接開いても使えます。
 
