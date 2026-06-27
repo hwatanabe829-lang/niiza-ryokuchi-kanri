@@ -490,6 +490,7 @@
   <div class="checkbox-field">
     <input type="checkbox" id="recEnvTax">
     <label for="recEnvTax">🌲 環境譲与税案件</label>
+    <span id="recEnvTaxInfo" style="margin-left:auto; font-size:12px; color:#1b5e20; display:none;"></span>
   </div>
   <div class="field">
     <label>作業前の写真</label>
@@ -901,6 +902,34 @@ document.getElementById('btnSetEnvTaxBudget').addEventListener('click', () => {
   renderEnvTaxBox();
 });
 
+// Quick env-tax budget status shown only when the checkbox is checked (kept out of sight otherwise)
+function updateRecEnvTaxInfo() {
+  const infoEl = document.getElementById('recEnvTaxInfo');
+  const checked = document.getElementById('recEnvTax').checked;
+  if (!checked) {
+    infoEl.style.display = 'none';
+    return;
+  }
+  const gs = getGreen(currentId);
+  const year = gs ? gs.selectedYear : envTaxSelectedYear;
+  const total = envTaxBudgets[year];
+  const used = data.reduce((sum, g) => {
+    return sum + g.records
+      .filter(r => r.envTax && String(r.year) === String(year) && r.id !== editingRecordId)
+      .reduce((s, r) => s + Number(r.cost || 0), 0);
+  }, 0);
+  const pendingCost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
+  const usedWithPending = used + pendingCost;
+  if (total == null) {
+    infoEl.textContent = `${year}年度の環境譲与税予算は未設定`;
+  } else {
+    const remain = total - usedWithPending;
+    infoEl.textContent = `${year}年度 環境譲与税予算残額: ¥${remain.toLocaleString()}`;
+  }
+  infoEl.style.display = 'inline';
+}
+document.getElementById('recEnvTax').addEventListener('change', updateRecEnvTaxInfo);
+
 // ---- Detail panel ----
 function getGreen(id) { return data.find(g => g.id === id); }
 
@@ -1085,6 +1114,7 @@ let currentItems = [];
 
 function renderItemListWrap() {
   const wrap = document.getElementById('itemListWrap');
+  if (typeof updateRecEnvTaxInfo === 'function') updateRecEnvTaxInfo();
   if (currentItems.length === 0) {
     wrap.innerHTML = '<div class="empty-msg">作業項目がまだありません</div>';
     return;
@@ -1139,6 +1169,7 @@ function resetRecordForm() {
   document.getElementById('btnCancelEdit').style.display = 'none';
   document.getElementById('recDate').value = '';
   document.getElementById('recEnvTax').checked = false;
+  document.getElementById('recEnvTaxInfo').style.display = 'none';
   document.getElementById('recPhoto').value = '';
   document.getElementById('recPhotoPreview').style.display = 'none';
   document.getElementById('recPhotoPreview').src = '';
@@ -1213,6 +1244,7 @@ function editRecord(gs, recId) {
   renderOptionsInto('recContractor', contractorList, r.contractor);
   renderBudgetCategorySelectInto('recBudgetCategory', r.budgetCategory);
   document.getElementById('recEnvTax').checked = !!r.envTax;
+  updateRecEnvTaxInfo();
   currentItems = (r.items || []).map(it => ({ ...it }));
   renderItemListWrap();
   const img = document.getElementById('recPhotoPreview');
