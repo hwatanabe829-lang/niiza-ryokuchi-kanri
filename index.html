@@ -475,12 +475,8 @@
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>🌳 伐採・剪定予定の木</h3>
-  <div class="row2">
-    <button class="outline" id="btnAddTreeModeFell" style="width:100%;">🪓 地図クリックで伐採予定の木を追加</button>
-    <button class="outline" id="btnAddTreeModePrune" style="width:100%;">✂️ 地図クリックで剪定予定の木を追加</button>
-  </div>
-  <div id="treeMarkerList" style="margin-top:8px;"></div>
-  <small class="help">地図上のマーカーをクリックすると、緑地の場所と同じ地図に🪓（伐採）/✂️（剪定）マークで表示されます。対応が済んだらチェックを入れてください。チェック済みの本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
+  <div id="treeMarkerList"></div>
+  <small class="help">下の「📄敷地図にプロット」で配置した🪓伐採／✂️剪定の木がここに一覧表示されます。対応が済んだらチェックを入れてください。チェック済みの本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -632,7 +628,6 @@ let envTaxSelectedYear = new Date().getFullYear();
 
 let addMode = false;            // create new green space via map click
 let repositionTargetId = null;  // move existing green space's map pin
-let treeAddMode = null;         // green space id to attach a new 伐採予定の木 marker to, via map click
 let currentId = null;
 let editingRecordId = null;
 let pinAddMode = false;
@@ -672,24 +667,6 @@ map.on('click', (e) => {
     }
     repositionTargetId = null;
     document.getElementById('btnRepositionMap').textContent = '🗺️ 地図上の位置を設定/変更';
-    return;
-  }
-  if (treeAddMode) {
-    const gs = getGreen(treeAddMode.gsId);
-    const type = treeAddMode.type;
-    if (gs) {
-      const label = prompt('木の名称・説明を入力してください', type === '剪定' ? '剪定予定の木' : '伐採予定の木');
-      if (label) {
-        if (!gs.treeMarkers) gs.treeMarkers = [];
-        gs.treeMarkers.push({ id: uid(), lat: e.latlng.lat, lng: e.latlng.lng, label, type, done: false });
-        save();
-        renderTreeMarkers();
-        if (currentId === gs.id) renderTreeMarkerList(gs);
-      }
-    }
-    treeAddMode = null;
-    document.getElementById('btnAddTreeModeFell').textContent = '🪓 地図クリックで伐採予定の木を追加';
-    document.getElementById('btnAddTreeModePrune').textContent = '✂️ 地図クリックで剪定予定の木を追加';
     return;
   }
   if (!addMode) return;
@@ -769,23 +746,6 @@ function renderTreeMarkers() {
     });
   });
 }
-
-function armTreeAddMode(type) {
-  if (!currentId) return;
-  if (treeAddMode && treeAddMode.type === type) {
-    treeAddMode = null;
-  } else {
-    treeAddMode = { gsId: currentId, type };
-  }
-  document.getElementById('btnAddTreeModeFell').textContent = (treeAddMode && treeAddMode.type === '伐採')
-    ? '🖱️ クリックして伐採予定の木を配置...（再クリックでキャンセル）'
-    : '🪓 地図クリックで伐採予定の木を追加';
-  document.getElementById('btnAddTreeModePrune').textContent = (treeAddMode && treeAddMode.type === '剪定')
-    ? '🖱️ クリックして剪定予定の木を配置...（再クリックでキャンセル）'
-    : '✂️ 地図クリックで剪定予定の木を追加';
-}
-document.getElementById('btnAddTreeModeFell').addEventListener('click', () => armTreeAddMode('伐採'));
-document.getElementById('btnAddTreeModePrune').addEventListener('click', () => armTreeAddMode('剪定'));
 
 function renderTreeMarkerList(gs) {
   const wrap = document.getElementById('treeMarkerList');
@@ -1190,16 +1150,12 @@ function openDetail(id) {
   renderRecordTable(gs);
   renderPdfSection(gs);
   renderTreeMarkerList(gs);
-  treeAddMode = null;
-  document.getElementById('btnAddTreeModeFell').textContent = '🪓 地図クリックで伐採予定の木を追加';
-  document.getElementById('btnAddTreeModePrune').textContent = '✂️ 地図クリックで剪定予定の木を追加';
   renderGreenList();
 }
 
 document.getElementById('btnCloseDetail').addEventListener('click', () => {
   document.getElementById('detail').style.display = 'none';
   currentId = null;
-  treeAddMode = null;
   renderGreenList();
 });
 
