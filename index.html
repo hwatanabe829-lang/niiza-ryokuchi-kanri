@@ -389,12 +389,13 @@
       <button id="btnAddContractor">業者を追加</button>
     </div>
     <div class="panel-section">
-      <h2>予算の種類</h2>
+      <h2>予算の種類（通常業務）</h2>
       <div id="budgetCatTags" class="tag-list"></div>
       <div class="field" style="margin-top:8px;">
-        <input type="text" id="newBudgetCatInput" placeholder="新しい予算名（例：環境譲与税予算）">
+        <input type="text" id="newBudgetCatInput" placeholder="新しい予算名（例：維持管理予算）">
       </div>
       <button id="btnAddBudgetCat">予算の種類を追加</button>
+      <small class="help">※環境譲与税予算はここではなく、上の「🌲 環境譲与税 予算」欄で別会計として管理します。</small>
     </div>
   </div>
 
@@ -539,13 +540,18 @@ const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
 const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
 const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
 const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了'];
-const DEFAULT_BUDCATS = ['通常予算', '環境譲与税予算'];
+const DEFAULT_BUDCATS = ['通常予算'];
 const NIIZA_CENTER = [35.7768, 139.5589];
 
 let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let types = JSON.parse(localStorage.getItem(TYPES_KEY) || 'null') || DEFAULT_TYPES.slice();
 let statuses = JSON.parse(localStorage.getItem(STATUS_KEY) || 'null') || DEFAULT_STATUSES.slice();
 let budgetCategories = JSON.parse(localStorage.getItem(BUDCAT_KEY) || 'null') || DEFAULT_BUDCATS.slice();
+// 環境譲与税予算は別会計で専用管理するため、通常の「予算の種類」一覧からは除外する
+if (budgetCategories.includes('環境譲与税予算')) {
+  budgetCategories = budgetCategories.filter(c => c !== '環境譲与税予算');
+  localStorage.setItem(BUDCAT_KEY, JSON.stringify(budgetCategories));
+}
 let peopleList = JSON.parse(localStorage.getItem(PEOPLE_KEY) || 'null') || [];
 let contractorList = JSON.parse(localStorage.getItem(CONTRACTORS_KEY) || 'null') || [];
 let envTaxBudgets = JSON.parse(localStorage.getItem(ENVTAX_BUDGET_KEY) || 'null') || {};
