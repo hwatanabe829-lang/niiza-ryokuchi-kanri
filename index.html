@@ -312,6 +312,16 @@
     text-align: right;
   }
   .budget-card-side select { font-size: 12px; padding: 3px 4px; }
+
+  /* Global 環境譲与税 usage box (sidebar, narrower than the per-green-space card) */
+  .envtax-box {
+    background: linear-gradient(135deg, #e8f5e9, #f4faf5);
+    border: 1px solid var(--green);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .envtax-box .budget-amounts { font-size: 18px; }
 </style>
 </head>
 <body>
@@ -323,6 +333,24 @@
 
 <div class="layout">
   <div id="sidebar">
+    <div class="panel-section">
+      <h2>🌲 環境譲与税 予算（全緑地合計）</h2>
+      <div class="field">
+        <label>対象年度</label>
+        <input type="number" id="envTaxYearInput" placeholder="2026">
+      </div>
+      <div class="envtax-box">
+        <div class="budget-amounts" id="envTaxAmounts">¥0<span class="budget-slash">/</span><span class="budget-total">未設定</span></div>
+        <div class="budget-progress-track"><div class="budget-progress-fill" id="envTaxProgressFill" style="width:0%;"></div></div>
+        <div class="budget-percent" id="envTaxPercent">-</div>
+        <div class="budget-remain" id="envTaxRemain"></div>
+      </div>
+      <div class="field">
+        <label>この年度の環境譲与税予算額（円）</label>
+        <input type="number" id="envTaxBudgetAmount" placeholder="3000000">
+      </div>
+      <button id="btnSetEnvTaxBudget" style="width:100%;">設定/更新</button>
+    </div>
     <div class="panel-section">
       <h2>緑地一覧</h2>
       <button class="add-btn" id="btnAddMode">➕ 地図クリックで緑地を追加</button>
@@ -343,6 +371,22 @@
         <input type="text" id="newStatusInput" placeholder="新しい段階名（例：施工中）">
       </div>
       <button id="btnAddStatus">段階を追加</button>
+    </div>
+    <div class="panel-section">
+      <h2>入力者一覧</h2>
+      <div id="peopleTags" class="tag-list"></div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="newPersonInput" placeholder="新しい入力者名（例：環境課 田中）">
+      </div>
+      <button id="btnAddPerson">入力者を追加</button>
+    </div>
+    <div class="panel-section">
+      <h2>受注業者一覧</h2>
+      <div id="contractorTags" class="tag-list"></div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="newContractorInput" placeholder="新しい業者名（例：〇〇造園株式会社）">
+      </div>
+      <button id="btnAddContractor">業者を追加</button>
     </div>
     <div class="panel-section">
       <h2>予算の種類</h2>
@@ -439,11 +483,8 @@
       <select id="recStatus"></select>
     </div>
   </div>
-  <div class="row2">
-    <div class="field"><label>入力者</label><input type="text" id="recInputBy" placeholder="例：環境課 田中"></div>
-    <div class="field"><label>発注担当者</label><input type="text" id="recOrderManager" placeholder="例：〇〇造園 鈴木"></div>
-  </div>
-  <div class="field"><label>実施業者</label><input type="text" id="recContractor" placeholder="〇〇造園株式会社"></div>
+  <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
+  <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
   <div class="field"><label>この作業で使う予算の種類</label><select id="recBudgetCategory"></select></div>
   <div class="checkbox-field">
     <input type="checkbox" id="recEnvTax">
@@ -493,6 +534,9 @@ const STORAGE_KEY = 'niiza_green_spaces_v2';
 const TYPES_KEY = 'niiza_green_types_v1';
 const STATUS_KEY = 'niiza_green_status_v1';
 const BUDCAT_KEY = 'niiza_green_budgetcategories_v1';
+const PEOPLE_KEY = 'niiza_green_people_v1';
+const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
+const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
 const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
 const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了'];
 const DEFAULT_BUDCATS = ['通常予算', '環境譲与税予算'];
@@ -502,6 +546,10 @@ let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let types = JSON.parse(localStorage.getItem(TYPES_KEY) || 'null') || DEFAULT_TYPES.slice();
 let statuses = JSON.parse(localStorage.getItem(STATUS_KEY) || 'null') || DEFAULT_STATUSES.slice();
 let budgetCategories = JSON.parse(localStorage.getItem(BUDCAT_KEY) || 'null') || DEFAULT_BUDCATS.slice();
+let peopleList = JSON.parse(localStorage.getItem(PEOPLE_KEY) || 'null') || [];
+let contractorList = JSON.parse(localStorage.getItem(CONTRACTORS_KEY) || 'null') || [];
+let envTaxBudgets = JSON.parse(localStorage.getItem(ENVTAX_BUDGET_KEY) || 'null') || {};
+let envTaxSelectedYear = new Date().getFullYear();
 
 let addMode = false;            // create new green space via map click
 let repositionTargetId = null;  // move existing green space's map pin
@@ -514,6 +562,9 @@ function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(types)); }
 function saveStatuses() { localStorage.setItem(STATUS_KEY, JSON.stringify(statuses)); }
 function saveBudgetCategories() { localStorage.setItem(BUDCAT_KEY, JSON.stringify(budgetCategories)); }
+function savePeopleList() { localStorage.setItem(PEOPLE_KEY, JSON.stringify(peopleList)); }
+function saveContractorList() { localStorage.setItem(CONTRACTORS_KEY, JSON.stringify(contractorList)); }
+function saveEnvTaxBudgets() { localStorage.setItem(ENVTAX_BUDGET_KEY, JSON.stringify(envTaxBudgets)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -729,13 +780,120 @@ document.getElementById('btnAddBudgetCat').addEventListener('click', () => {
     renderBudgetCategorySelectInto('recBudgetCategory');
   }
 });
-function renderBudgetCategorySelectInto(selectId, preferredValue) {
+// Generic helper: populate a <select> from a list, keeping/choosing a sensible selected value
+function renderOptionsInto(selectId, list, preferredValue) {
   const sel = document.getElementById(selectId);
   const prev = preferredValue != null ? preferredValue : sel.value;
-  sel.innerHTML = budgetCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (budgetCategories.includes(prev)) sel.value = prev;
-  else if (budgetCategories.length) sel.value = budgetCategories[0];
+  sel.innerHTML = list.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if (list.includes(prev)) sel.value = prev;
+  else if (list.length) sel.value = list[0];
 }
+function renderBudgetCategorySelectInto(selectId, preferredValue) {
+  renderOptionsInto(selectId, budgetCategories, preferredValue);
+}
+
+// ---- People (入力者) ----
+function renderPeopleTags() {
+  const wrap = document.getElementById('peopleTags');
+  wrap.innerHTML = '';
+  peopleList.forEach((p, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(p)}</span><button data-i="${i}">✕</button>`;
+    tag.querySelector('button').addEventListener('click', () => {
+      peopleList.splice(i, 1);
+      savePeopleList();
+      renderPeopleTags();
+      renderOptionsInto('recInputBy', peopleList);
+    });
+    wrap.appendChild(tag);
+  });
+}
+document.getElementById('btnAddPerson').addEventListener('click', () => {
+  const input = document.getElementById('newPersonInput');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!peopleList.includes(v)) peopleList.push(v);
+  savePeopleList();
+  input.value = '';
+  renderPeopleTags();
+  renderOptionsInto('recInputBy', peopleList);
+});
+
+// ---- Contractors (受注業者) ----
+function renderContractorTags() {
+  const wrap = document.getElementById('contractorTags');
+  wrap.innerHTML = '';
+  contractorList.forEach((c, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(c)}</span><button data-i="${i}">✕</button>`;
+    tag.querySelector('button').addEventListener('click', () => {
+      contractorList.splice(i, 1);
+      saveContractorList();
+      renderContractorTags();
+      renderOptionsInto('recContractor', contractorList);
+    });
+    wrap.appendChild(tag);
+  });
+}
+document.getElementById('btnAddContractor').addEventListener('click', () => {
+  const input = document.getElementById('newContractorInput');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!contractorList.includes(v)) contractorList.push(v);
+  saveContractorList();
+  input.value = '';
+  renderContractorTags();
+  renderOptionsInto('recContractor', contractorList);
+});
+
+// ---- Global 環境譲与税 budget summary (aggregated across ALL green spaces) ----
+function renderEnvTaxBox() {
+  document.getElementById('envTaxYearInput').value = envTaxSelectedYear;
+  const total = envTaxBudgets[envTaxSelectedYear];
+  const used = data.reduce((sum, gs) => {
+    return sum + gs.records
+      .filter(r => r.envTax && String(r.year) === String(envTaxSelectedYear))
+      .reduce((s, r) => s + Number(r.cost || 0), 0);
+  }, 0);
+  document.getElementById('envTaxBudgetAmount').value = total != null ? total : '';
+
+  const amountsEl = document.getElementById('envTaxAmounts');
+  amountsEl.innerHTML = `¥${used.toLocaleString()}<span class="budget-slash">/</span><span class="budget-total">${total != null ? '¥' + Number(total).toLocaleString() : '未設定'}</span>`;
+
+  const fillEl = document.getElementById('envTaxProgressFill');
+  const percentEl = document.getElementById('envTaxPercent');
+  const remainEl = document.getElementById('envTaxRemain');
+
+  if (total == null) {
+    fillEl.style.width = '0%';
+    fillEl.style.background = '#ccc';
+    percentEl.textContent = 'この年度の予算はまだ設定されていません';
+    remainEl.textContent = '';
+    remainEl.className = 'budget-remain';
+    return;
+  }
+  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+  fillEl.style.width = Math.min(pct, 100) + '%';
+  fillEl.style.background = pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32');
+  percentEl.textContent = pct + '% 使用';
+  const remain = total - used;
+  remainEl.textContent = '残額: ¥' + remain.toLocaleString() + (remain < 0 ? '（予算超過）' : '');
+  remainEl.className = 'budget-remain' + (remain < 0 ? ' over' : '');
+}
+document.getElementById('envTaxYearInput').addEventListener('change', (e) => {
+  const y = parseInt(e.target.value, 10);
+  if (y) envTaxSelectedYear = y;
+  renderEnvTaxBox();
+});
+document.getElementById('btnSetEnvTaxBudget').addEventListener('click', () => {
+  const amount = document.getElementById('envTaxBudgetAmount').value;
+  if (amount === '') { alert('金額を入力してください'); return; }
+  envTaxBudgets[envTaxSelectedYear] = Number(amount);
+  saveEnvTaxBudgets();
+  renderEnvTaxBox();
+});
 
 // ---- Detail panel ----
 function getGreen(id) { return data.find(g => g.id === id); }
@@ -974,9 +1132,6 @@ function resetRecordForm() {
   document.getElementById('btnAddRecord').textContent = '記録を追加';
   document.getElementById('btnCancelEdit').style.display = 'none';
   document.getElementById('recDate').value = '';
-  document.getElementById('recContractor').value = '';
-  document.getElementById('recInputBy').value = '';
-  document.getElementById('recOrderManager').value = '';
   document.getElementById('recEnvTax').checked = false;
   document.getElementById('recPhoto').value = '';
   document.getElementById('recPhotoPreview').style.display = 'none';
@@ -984,6 +1139,8 @@ function resetRecordForm() {
   document.getElementById('itemCost').value = '';
   renderRecTypeSelect();
   renderRecStatusSelect();
+  renderOptionsInto('recInputBy', peopleList);
+  renderOptionsInto('recContractor', contractorList);
   renderItemListWrap();
   const gs = getGreen(currentId);
   renderBudgetCategorySelectInto('recBudgetCategory', gs ? gs.displayBudgetCategory : null);
@@ -996,9 +1153,8 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   if (!gs) return;
   const date = document.getElementById('recDate').value;
   const status = document.getElementById('recStatus').value;
-  const inputBy = document.getElementById('recInputBy').value.trim();
-  const orderManager = document.getElementById('recOrderManager').value.trim();
-  const contractor = document.getElementById('recContractor').value.trim();
+  const inputBy = document.getElementById('recInputBy').value;
+  const contractor = document.getElementById('recContractor').value;
   const budgetCategory = document.getElementById('recBudgetCategory').value;
   const envTax = document.getElementById('recEnvTax').checked;
   const photoImg = document.getElementById('recPhotoPreview');
@@ -1014,7 +1170,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
     const r = gs.records.find(x => x.id === editingRecordId);
     if (r) {
       r.year = gs.selectedYear; r.date = date; r.status = status;
-      r.inputBy = inputBy; r.orderManager = orderManager;
+      r.inputBy = inputBy;
       r.contractor = contractor; r.envTax = envTax; r.budgetCategory = budgetCategory;
       r.items = currentItems.slice(); r.cost = cost;
       if (photo) r.photo = photo;
@@ -1022,7 +1178,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   } else {
     gs.records.push({
       id: uid(), year: gs.selectedYear, date, status,
-      inputBy, orderManager, contractor, envTax, budgetCategory,
+      inputBy, contractor, envTax, budgetCategory,
       items: currentItems.slice(), cost, photo
     });
   }
@@ -1031,6 +1187,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   renderBudgetCard(gs);
   renderRecordTable(gs);
   renderGreenList();
+  renderEnvTaxBox();
 });
 
 function editRecord(gs, recId) {
@@ -1046,9 +1203,8 @@ function editRecord(gs, recId) {
   document.getElementById('btnCancelEdit').style.display = 'inline-block';
   document.getElementById('recDate').value = r.date;
   renderRecStatusSelect(); document.getElementById('recStatus').value = r.status || statuses[0];
-  document.getElementById('recInputBy').value = r.inputBy || '';
-  document.getElementById('recOrderManager').value = r.orderManager || '';
-  document.getElementById('recContractor').value = r.contractor || '';
+  renderOptionsInto('recInputBy', peopleList, r.inputBy);
+  renderOptionsInto('recContractor', contractorList, r.contractor);
   renderBudgetCategorySelectInto('recBudgetCategory', r.budgetCategory);
   document.getElementById('recEnvTax').checked = !!r.envTax;
   currentItems = (r.items || []).map(it => ({ ...it }));
@@ -1072,7 +1228,7 @@ function renderRecordTable(gs) {
   const sorted = filtered.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
   let html = `<table><tr>
     <th>年度</th><th>日付</th><th>作業内容</th><th>予算</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
-    <th>入力者</th><th>発注担当</th><th>費用</th><th>写真</th><th></th>
+    <th>入力者</th><th>費用</th><th>写真</th><th></th>
   </tr>`;
   sorted.forEach(r => {
     const items = r.items || [];
@@ -1096,7 +1252,6 @@ function renderRecordTable(gs) {
       </td>
       <td>${escapeHtml(r.contractor || '-')}</td>
       <td>${escapeHtml(r.inputBy || '-')}</td>
-      <td>${escapeHtml(r.orderManager || '-')}</td>
       <td>¥${Number(r.cost).toLocaleString()}</td>
       <td>${r.photo ? `<img class="photo-thumb" src="${r.photo}" data-id="${r.id}">` : '-'}</td>
       <td>
@@ -1128,7 +1283,7 @@ function renderRecordTable(gs) {
       if (!confirm('この記録を削除しますか？')) return;
       gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
       save();
-      renderBudgetCard(gs); renderRecordTable(gs); renderGreenList();
+      renderBudgetCard(gs); renderRecordTable(gs); renderGreenList(); renderEnvTaxBox();
     });
   });
 }
@@ -1280,6 +1435,9 @@ function renderAll() {
   renderStatusTags();
   renderRecStatusSelect();
   renderBudgetCatTags();
+  renderPeopleTags();
+  renderContractorTags();
+  renderEnvTaxBox();
 }
 
 renderAll();
