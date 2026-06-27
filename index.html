@@ -254,6 +254,64 @@
     font-size: 12px;
     margin-top: 4px;
   }
+
+  /* Prominent budget card: left = amounts/usage, right = which-budget selector */
+  .budget-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: linear-gradient(135deg, #e8f5e9, #f4faf5);
+    border: 1px solid var(--green);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .budget-card-main { flex: 1; min-width: 0; }
+  .budget-cat-name {
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 2px;
+    font-weight: bold;
+  }
+  .budget-amounts {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--green);
+    margin-bottom: 6px;
+    line-height: 1.1;
+  }
+  .budget-amounts .budget-total { color: #666; font-weight: normal; font-size: 14px; }
+  .budget-slash { color: #999; margin: 0 4px; font-weight: normal; font-size: 16px; }
+  .budget-progress-track {
+    width: 100%;
+    height: 10px;
+    background: #ddd;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .budget-progress-fill {
+    height: 100%;
+    background: var(--green);
+    transition: width 0.3s;
+  }
+  .budget-percent { font-size: 13px; font-weight: bold; color: #333; }
+  .budget-remain { font-size: 12px; color: #555; margin-top: 2px; }
+  .budget-remain.over { color: #c62828; font-weight: bold; }
+  .budget-card-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-left: 12px;
+    min-width: 130px;
+  }
+  .budget-card-side label {
+    font-size: 10px;
+    color: #555;
+    margin-bottom: 3px;
+    text-align: right;
+  }
+  .budget-card-side select { font-size: 12px; padding: 3px 4px; }
 </style>
 </head>
 <body>
@@ -285,6 +343,14 @@
         <input type="text" id="newStatusInput" placeholder="新しい段階名（例：施工中）">
       </div>
       <button id="btnAddStatus">段階を追加</button>
+    </div>
+    <div class="panel-section">
+      <h2>予算の種類</h2>
+      <div id="budgetCatTags" class="tag-list"></div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="newBudgetCatInput" placeholder="新しい予算名（例：環境譲与税予算）">
+      </div>
+      <button id="btnAddBudgetCat">予算の種類を追加</button>
     </div>
   </div>
 
@@ -343,10 +409,24 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3><span id="budgetYearLabel">-</span>年度の予算</h3>
-  <div id="budgetList"></div>
-  <div class="field"><label>予算額（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
-  <button id="btnSetBudget">この年度の予算を設定/更新</button>
+  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況</h3>
+  <div class="budget-card">
+    <div class="budget-card-main">
+      <div class="budget-cat-name" id="budgetCatName">-</div>
+      <div class="budget-amounts">
+        <span id="budgetUsedAmt">¥0</span><span class="budget-slash">/</span><span class="budget-total" id="budgetTotalAmt">未設定</span>
+      </div>
+      <div class="budget-progress-track"><div class="budget-progress-fill" id="budgetProgressFill" style="width:0%;"></div></div>
+      <div class="budget-percent" id="budgetPercent">-</div>
+      <div class="budget-remain" id="budgetRemainAmt"></div>
+    </div>
+    <div class="budget-card-side">
+      <label>表示する予算の種類</label>
+      <select id="budgetCategorySelect"></select>
+    </div>
+  </div>
+  <div class="field"><label>この予算の金額を設定/更新（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
+  <button id="btnSetBudget">設定/更新</button>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -364,6 +444,7 @@
     <div class="field"><label>発注担当者</label><input type="text" id="recOrderManager" placeholder="例：〇〇造園 鈴木"></div>
   </div>
   <div class="field"><label>実施業者</label><input type="text" id="recContractor" placeholder="〇〇造園株式会社"></div>
+  <div class="field"><label>この作業で使う予算の種類</label><select id="recBudgetCategory"></select></div>
   <div class="checkbox-field">
     <input type="checkbox" id="recEnvTax">
     <label for="recEnvTax">🌲 環境譲与税案件</label>
@@ -411,13 +492,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dis
 const STORAGE_KEY = 'niiza_green_spaces_v2';
 const TYPES_KEY = 'niiza_green_types_v1';
 const STATUS_KEY = 'niiza_green_status_v1';
-const DEFAULT_TYPES = ['草刈り', '剪定', '除草', '清掃', '点検', '植栽', 'その他'];
+const BUDCAT_KEY = 'niiza_green_budgetcategories_v1';
+const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
 const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了'];
+const DEFAULT_BUDCATS = ['通常予算', '環境譲与税予算'];
 const NIIZA_CENTER = [35.7768, 139.5589];
 
 let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let types = JSON.parse(localStorage.getItem(TYPES_KEY) || 'null') || DEFAULT_TYPES.slice();
 let statuses = JSON.parse(localStorage.getItem(STATUS_KEY) || 'null') || DEFAULT_STATUSES.slice();
+let budgetCategories = JSON.parse(localStorage.getItem(BUDCAT_KEY) || 'null') || DEFAULT_BUDCATS.slice();
 
 let addMode = false;            // create new green space via map click
 let repositionTargetId = null;  // move existing green space's map pin
@@ -429,6 +513,7 @@ let markers = {};
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(types)); }
 function saveStatuses() { localStorage.setItem(STATUS_KEY, JSON.stringify(statuses)); }
+function saveBudgetCategories() { localStorage.setItem(BUDCAT_KEY, JSON.stringify(budgetCategories)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -464,7 +549,8 @@ map.on('click', (e) => {
     lat: e.latlng.lat, lng: e.latlng.lng,
     memo: '', budgets: {}, records: [],
     pdf: null, pdfName: null, pdfPins: [],
-    years: [thisYear], selectedYear: thisYear
+    years: [thisYear], selectedYear: thisYear,
+    displayBudgetCategory: budgetCategories[0] || '通常予算'
   };
   data.push(gs);
   save();
@@ -607,6 +693,50 @@ function renderRecStatusSelect() {
   if (statuses.includes(prev)) sel.value = prev;
 }
 
+// ---- Budget categories (e.g. 通常予算 / 環境譲与税予算 etc.) ----
+function renderBudgetCatTags() {
+  const wrap = document.getElementById('budgetCatTags');
+  wrap.innerHTML = '';
+  budgetCategories.forEach((c, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(c)}</span><button data-i="${i}">✕</button>`;
+    tag.querySelector('button').addEventListener('click', () => {
+      budgetCategories.splice(i, 1);
+      saveBudgetCategories();
+      renderBudgetCatTags();
+      const gs = getGreen(currentId);
+      if (gs) {
+        renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
+        renderBudgetCategorySelectInto('recBudgetCategory');
+        renderBudgetCard(gs);
+      }
+    });
+    wrap.appendChild(tag);
+  });
+}
+document.getElementById('btnAddBudgetCat').addEventListener('click', () => {
+  const input = document.getElementById('newBudgetCatInput');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!budgetCategories.includes(v)) budgetCategories.push(v);
+  saveBudgetCategories();
+  input.value = '';
+  renderBudgetCatTags();
+  const gs = getGreen(currentId);
+  if (gs) {
+    renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
+    renderBudgetCategorySelectInto('recBudgetCategory');
+  }
+});
+function renderBudgetCategorySelectInto(selectId, preferredValue) {
+  const sel = document.getElementById(selectId);
+  const prev = preferredValue != null ? preferredValue : sel.value;
+  sel.innerHTML = budgetCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (budgetCategories.includes(prev)) sel.value = prev;
+  else if (budgetCategories.length) sel.value = budgetCategories[0];
+}
+
 // ---- Detail panel ----
 function getGreen(id) { return data.find(g => g.id === id); }
 
@@ -636,7 +766,7 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
   save();
   document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
   document.getElementById('recordYearLabel').textContent = gs.selectedYear;
-  renderBudgetList(gs);
+  renderBudgetCard(gs);
   renderRecordTable(gs);
 });
 
@@ -652,7 +782,7 @@ document.getElementById('btnAddYear').addEventListener('click', () => {
   save();
   input.value = '';
   renderYearSelect(gs);
-  renderBudgetList(gs);
+  renderBudgetCard(gs);
   renderRecordTable(gs);
 });
 
@@ -666,7 +796,7 @@ function openDetail(id) {
   document.getElementById('editName').value = gs.name;
   document.getElementById('editMemo').value = gs.memo || '';
   renderYearSelect(gs);
-  renderBudgetList(gs);
+  renderBudgetCard(gs);
   renderRecordTable(gs);
   renderPdfSection(gs);
   renderGreenList();
@@ -697,34 +827,80 @@ document.getElementById('btnDeleteGreen').addEventListener('click', () => {
   renderAll();
 });
 
-// ---- Budget (scoped to the green space's currently selected fiscal year) ----
-function renderBudgetList(gs) {
-  const wrap = document.getElementById('budgetList');
+// ---- Budget (scoped to the green space's currently selected fiscal year AND budget category) ----
+function ensureBudgetsShape(gs) {
+  if (!gs.budgets) gs.budgets = {};
+  Object.keys(gs.budgets).forEach(y => {
+    if (typeof gs.budgets[y] === 'number') {
+      // migrate legacy flat-number budgets into the first category bucket
+      gs.budgets[y] = { [budgetCategories[0] || '通常予算']: gs.budgets[y] };
+    }
+  });
+}
+function ensureDisplayBudgetCategory(gs) {
+  if (!gs.displayBudgetCategory || !budgetCategories.includes(gs.displayBudgetCategory)) {
+    gs.displayBudgetCategory = budgetCategories[0] || '通常予算';
+  }
+}
+
+function renderBudgetCard(gs) {
+  ensureBudgetsShape(gs);
+  ensureDisplayBudgetCategory(gs);
+  renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
+
   const y = gs.selectedYear;
-  const budget = gs.budgets[y];
-  const spent = gs.records.filter(r => String(r.year) === String(y))
+  const cat = gs.displayBudgetCategory;
+  const budgetForYear = gs.budgets[y] || {};
+  const total = budgetForYear[cat];
+  const spent = gs.records
+    .filter(r => String(r.year) === String(y) && (r.budgetCategory || budgetCategories[0]) === cat)
     .reduce((s, r) => s + Number(r.cost || 0), 0);
-  if (budget == null) {
-    wrap.innerHTML = `<div class="empty-msg">${y}年度の予算は未設定です（支出合計: ¥${spent.toLocaleString()}）</div>`;
+
+  document.getElementById('budgetCatName').textContent = cat;
+  document.getElementById('budgetUsedAmt').textContent = '¥' + spent.toLocaleString();
+  document.getElementById('budgetAmount').value = total != null ? total : '';
+
+  const fillEl = document.getElementById('budgetProgressFill');
+  const percentEl = document.getElementById('budgetPercent');
+  const remainEl = document.getElementById('budgetRemainAmt');
+
+  if (total == null) {
+    document.getElementById('budgetTotalAmt').textContent = '未設定';
+    fillEl.style.width = '0%';
+    fillEl.style.background = '#ccc';
+    percentEl.textContent = 'この予算はまだ設定されていません';
+    remainEl.textContent = '';
+    remainEl.className = 'budget-remain';
     return;
   }
-  const remain = budget - spent;
-  wrap.innerHTML = `<div class="budget-line">
-    <div>予算: ¥${Number(budget).toLocaleString()}</div>
-    <div>支出合計: ¥${spent.toLocaleString()}</div>
-    <div class="remain ${remain < 0 ? 'over' : ''}">残額: ¥${remain.toLocaleString()} ${remain < 0 ? '（予算超過）' : ''}</div>
-  </div>`;
+  const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
+  document.getElementById('budgetTotalAmt').textContent = '¥' + Number(total).toLocaleString();
+  fillEl.style.width = Math.min(pct, 100) + '%';
+  fillEl.style.background = pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32');
+  percentEl.textContent = pct + '% 使用';
+  const remain = total - spent;
+  remainEl.textContent = '残額: ¥' + remain.toLocaleString() + (remain < 0 ? '（予算超過）' : '');
+  remainEl.className = 'budget-remain' + (remain < 0 ? ' over' : '');
 }
+
+document.getElementById('budgetCategorySelect').addEventListener('change', (e) => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  gs.displayBudgetCategory = e.target.value;
+  save();
+  renderBudgetCard(gs);
+});
 
 document.getElementById('btnSetBudget').addEventListener('click', () => {
   const gs = getGreen(currentId);
   if (!gs) return;
   const amount = document.getElementById('budgetAmount').value;
   if (amount === '') { alert('予算額を入力してください'); return; }
-  gs.budgets[gs.selectedYear] = Number(amount);
+  ensureBudgetsShape(gs);
+  if (!gs.budgets[gs.selectedYear]) gs.budgets[gs.selectedYear] = {};
+  gs.budgets[gs.selectedYear][gs.displayBudgetCategory] = Number(amount);
   save();
-  renderBudgetList(gs);
-  document.getElementById('budgetAmount').value = '';
+  renderBudgetCard(gs);
 });
 
 // ---- Records ----
@@ -809,6 +985,8 @@ function resetRecordForm() {
   renderRecTypeSelect();
   renderRecStatusSelect();
   renderItemListWrap();
+  const gs = getGreen(currentId);
+  renderBudgetCategorySelectInto('recBudgetCategory', gs ? gs.displayBudgetCategory : null);
 }
 
 document.getElementById('btnCancelEdit').addEventListener('click', resetRecordForm);
@@ -821,6 +999,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   const inputBy = document.getElementById('recInputBy').value.trim();
   const orderManager = document.getElementById('recOrderManager').value.trim();
   const contractor = document.getElementById('recContractor').value.trim();
+  const budgetCategory = document.getElementById('recBudgetCategory').value;
   const envTax = document.getElementById('recEnvTax').checked;
   const photoImg = document.getElementById('recPhotoPreview');
   const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
@@ -836,20 +1015,20 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
     if (r) {
       r.year = gs.selectedYear; r.date = date; r.status = status;
       r.inputBy = inputBy; r.orderManager = orderManager;
-      r.contractor = contractor; r.envTax = envTax;
+      r.contractor = contractor; r.envTax = envTax; r.budgetCategory = budgetCategory;
       r.items = currentItems.slice(); r.cost = cost;
       if (photo) r.photo = photo;
     }
   } else {
     gs.records.push({
       id: uid(), year: gs.selectedYear, date, status,
-      inputBy, orderManager, contractor, envTax,
+      inputBy, orderManager, contractor, envTax, budgetCategory,
       items: currentItems.slice(), cost, photo
     });
   }
   save();
   resetRecordForm();
-  renderBudgetList(gs);
+  renderBudgetCard(gs);
   renderRecordTable(gs);
   renderGreenList();
 });
@@ -870,13 +1049,14 @@ function editRecord(gs, recId) {
   document.getElementById('recInputBy').value = r.inputBy || '';
   document.getElementById('recOrderManager').value = r.orderManager || '';
   document.getElementById('recContractor').value = r.contractor || '';
+  renderBudgetCategorySelectInto('recBudgetCategory', r.budgetCategory);
   document.getElementById('recEnvTax').checked = !!r.envTax;
   currentItems = (r.items || []).map(it => ({ ...it }));
   renderItemListWrap();
   const img = document.getElementById('recPhotoPreview');
   if (r.photo) { img.src = r.photo; img.style.display = 'block'; }
   else { img.style.display = 'none'; img.src = ''; }
-  renderBudgetList(gs);
+  renderBudgetCard(gs);
   renderRecordTable(gs);
   document.getElementById('recDate').scrollIntoView({behavior:'smooth', block:'center'});
 }
@@ -891,7 +1071,7 @@ function renderRecordTable(gs) {
   }
   const sorted = filtered.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
   let html = `<table><tr>
-    <th>年度</th><th>日付</th><th>作業内容</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
+    <th>年度</th><th>日付</th><th>作業内容</th><th>予算</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
     <th>入力者</th><th>発注担当</th><th>費用</th><th>写真</th><th></th>
   </tr>`;
   sorted.forEach(r => {
@@ -907,6 +1087,7 @@ function renderRecordTable(gs) {
       <td>${escapeHtml(r.year)}</td>
       <td>${escapeHtml(r.date)}</td>
       <td>${itemsLabel}</td>
+      <td>${escapeHtml(r.budgetCategory || '-')}</td>
       <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
       <td>
         <select class="status-select" data-id="${r.id}">
@@ -947,7 +1128,7 @@ function renderRecordTable(gs) {
       if (!confirm('この記録を削除しますか？')) return;
       gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
       save();
-      renderBudgetList(gs); renderRecordTable(gs); renderGreenList();
+      renderBudgetCard(gs); renderRecordTable(gs); renderGreenList();
     });
   });
 }
@@ -1098,6 +1279,7 @@ function renderAll() {
   renderRecTypeSelect();
   renderStatusTags();
   renderRecStatusSelect();
+  renderBudgetCatTags();
 }
 
 renderAll();
