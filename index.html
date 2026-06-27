@@ -4,1568 +4,916 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>新座市 緑地管理システム</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root {
-    --green: #2d7a3a;
+    --green: #2e7d32;
     --green-light: #e8f5e9;
-    --green-mid: #4caf50;
-    --orange: #e65100;
-    --orange-light: #fff3e0;
-    --red: #c62828;
-    --red-light: #ffebee;
-    --blue: #1565c0;
-    --blue-light: #e3f2fd;
-    --gray: #546e7a;
-    --gray-light: #f5f5f5;
     --border: #ddd;
-    --shadow: 0 2px 8px rgba(0,0,0,0.12);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f0f4f0; color: #333; font-size: 14px; }
-
-  /* Header */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #f5f5f5;
+    color: #222;
+  }
   header {
     background: var(--green);
-    color: #fff;
+    color: white;
     padding: 12px 20px;
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    box-shadow: var(--shadow);
-    position: sticky; top: 0; z-index: 1000;
+    align-items: center;
   }
-  header h1 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
-  header .budget-bar { font-size: 13px; opacity: 0.9; }
-  header .budget-bar span { font-weight: bold; font-size: 15px; }
-
-  /* Tabs */
-  .tabs { display: flex; background: #fff; border-bottom: 2px solid var(--green); }
-  .tab-btn {
-    padding: 10px 20px; cursor: pointer; border: none; background: none;
-    font-size: 14px; color: var(--gray); border-bottom: 3px solid transparent;
-    margin-bottom: -2px; transition: all 0.2s;
+  header h1 { margin: 0; font-size: 18px; }
+  header .hint { font-size: 12px; opacity: 0.9; }
+  .layout {
+    display: flex;
+    height: calc(100vh - 52px);
   }
-  .tab-btn.active { color: var(--green); border-bottom-color: var(--green); font-weight: bold; }
-  .tab-btn:hover { background: var(--green-light); }
-
-  /* Tab panes */
-  .tab-pane { display: none; padding: 16px; }
-  .tab-pane.active { display: block; }
-
-  /* Cards */
-  .card { background: #fff; border-radius: 8px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; }
-  .card-title { font-size: 13px; color: var(--gray); margin-bottom: 6px; }
-  .card-value { font-size: 22px; font-weight: bold; }
-
-  /* Dashboard grid */
-  .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .stat-card { background: #fff; border-radius: 8px; box-shadow: var(--shadow); padding: 14px 16px; border-left: 4px solid var(--green); }
-  .stat-card.orange { border-left-color: var(--orange); }
-  .stat-card.red { border-left-color: var(--red); }
-  .stat-card.blue { border-left-color: var(--blue); }
-  .stat-label { font-size: 11px; color: var(--gray); margin-bottom: 4px; }
-  .stat-value { font-size: 20px; font-weight: bold; color: #333; }
-  .stat-sub { font-size: 11px; color: var(--gray); margin-top: 2px; }
-
-  /* Budget bar */
-  .budget-progress { background: #fff; border-radius: 8px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px; }
-  .budget-progress h3 { font-size: 14px; margin-bottom: 10px; color: var(--green); }
-  .progress-bar { height: 22px; background: #e0e0e0; border-radius: 11px; overflow: hidden; position: relative; }
-  .progress-fill { height: 100%; border-radius: 11px; transition: width 0.5s; position: relative; }
-  .progress-fill.ok { background: linear-gradient(90deg, #4caf50, #81c784); }
-  .progress-fill.warn { background: linear-gradient(90deg, #ff9800, #ffb74d); }
-  .progress-fill.over { background: linear-gradient(90deg, #f44336, #e57373); }
-  .budget-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--gray); }
-
-  /* Alert list */
-  .alert-item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;
-    border-left: 4px solid;
+  #sidebar {
+    width: 320px;
+    background: white;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
   }
-  .alert-item.high { background: var(--red-light); border-left-color: var(--red); }
-  .alert-item.mid { background: var(--orange-light); border-left-color: var(--orange); }
-  .alert-item.low { background: var(--blue-light); border-left-color: var(--blue); }
-  .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .alert-name { font-weight: bold; font-size: 13px; }
-  .alert-desc { font-size: 12px; color: var(--gray); margin-top: 2px; }
-
-  /* Table */
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: var(--green); color: #fff; padding: 9px 10px; text-align: left; font-weight: normal; white-space: nowrap; cursor: pointer; user-select: none; }
-  th:hover { background: #1b5e20; }
-  td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
-  tr:hover td { background: var(--green-light); }
-  tr:nth-child(even) td { background: #fafafa; }
-  tr:nth-child(even):hover td { background: var(--green-light); }
-
-  /* Badges */
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
-  .badge-green { background: #c8e6c9; color: #1b5e20; }
-  .badge-orange { background: #ffe0b2; color: #e65100; }
-  .badge-red { background: #ffcdd2; color: #b71c1c; }
-  .badge-blue { background: #bbdefb; color: #0d47a1; }
-  .badge-gray { background: #eceff1; color: #546e7a; }
-
-  /* Buttons */
-  .btn { padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; transition: opacity 0.2s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-green { background: var(--green); color: #fff; }
-  .btn-orange { background: var(--orange); color: #fff; }
-  .btn-gray { background: #78909c; color: #fff; }
-  .btn-sm { padding: 4px 10px; font-size: 12px; }
-
-  /* Toolbar */
-  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .toolbar input[type="text"] { padding: 7px 12px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; width: 200px; }
-  .toolbar select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; }
-
-  /* Map */
-  #map { height: 520px; border-radius: 8px; box-shadow: var(--shadow); }
-  .map-legend { background: #fff; border-radius: 8px; box-shadow: var(--shadow); padding: 12px 16px; margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-  .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); }
-
-  /* Modal */
+  #mainArea { flex: 1; display: flex; flex-direction: column; position: relative; }
+  #map { flex: 1; }
+  .panel-section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-section h2 {
+    font-size: 14px;
+    margin: 0 0 8px;
+    color: var(--green);
+  }
+  .green-item {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    background: #fafafa;
+  }
+  .green-item:hover { background: var(--green-light); }
+  .green-item.active { background: var(--green-light); border-color: var(--green); }
+  .green-item .name { font-weight: bold; }
+  .green-item .sub { color: #777; font-size: 11px; }
+  button {
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button.secondary { background: #777; }
+  button.danger { background: #c62828; }
+  button.outline { background: white; color: var(--green); border: 1px solid var(--green); }
+  button:hover { opacity: 0.85; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .add-btn { width: 100%; margin-bottom: 8px; }
+  #detail {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 440px;
+    height: 100%;
+    background: white;
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    box-shadow: -3px 0 8px rgba(0,0,0,0.08);
+    padding: 16px;
+    z-index: 500;
+  }
+  #detail h2 { color: var(--green); margin-top: 0; }
+  #detail h3 { font-size: 14px; margin: 4px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 8px; }
+  th, td { border: 1px solid var(--border); padding: 4px 5px; text-align: left; vertical-align: top; }
+  th { background: var(--green-light); }
+  .field { margin-bottom: 8px; }
+  .field label { display: block; font-size: 12px; color: #555; margin-bottom: 3px; }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    padding: 5px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .row2 { display: flex; gap: 8px; }
+  .row3 { display: flex; gap: 8px; }
+  .row2 > div, .row3 > div { flex: 1; }
+  .photo-thumb {
+    max-width: 90px;
+    max-height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-top: 4px;
+    cursor: pointer;
+    display: block;
+  }
+  .close-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: none;
+    color: #999;
+    font-size: 18px;
+    padding: 2px 8px;
+  }
+  .budget-line {
+    background: var(--green-light);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .budget-line .remain { font-weight: bold; }
+  .budget-line .over { color: #c62828; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .tag {
+    background: #eee;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tag button {
+    background: none;
+    color: #c62828;
+    padding: 0;
+    font-size: 12px;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: #ffe0b2;
+    color: #e65100;
+  }
+  .status-select { font-size: 11px; padding: 2px 4px; }
   .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000;
-    display: flex; align-items: flex-start; justify-content: center;
-    padding: 20px; overflow-y: auto;
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
   }
-  .modal-overlay.hidden { display: none; }
-  .modal {
-    background: #fff; border-radius: 10px; width: 100%; max-width: 680px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.25); margin: auto;
+  .modal-overlay img { max-width: 90vw; max-height: 90vh; }
+  small.help { color: #888; display: block; margin-top: 4px; }
+  .empty-msg { color: #999; font-size: 13px; padding: 10px 0; }
+
+  /* PDF site-plan section */
+  .pdf-wrap {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    background: #fafafa;
   }
-  .modal-header {
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
-    background: var(--green); color: #fff; border-radius: 10px 10px 0 0;
+  #pdfCanvasHolder {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border: 1px solid var(--border);
+    background: white;
+    overflow: auto;
+    max-height: 320px;
   }
-  .modal-header h2 { font-size: 16px; }
-  .modal-close { background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; line-height: 1; }
-  .modal-body { padding: 20px; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .form-group { display: flex; flex-direction: column; gap: 4px; }
-  .form-group.full { grid-column: 1 / -1; }
-  .form-group label { font-size: 12px; color: var(--gray); font-weight: bold; }
-  .form-group input, .form-group select, .form-group textarea {
-    padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px;
-    font-family: inherit;
+  #pdfCanvasHolder canvas { display: block; max-width: 100%; }
+  .pdf-pin {
+    position: absolute;
+    width: 18px; height: 18px;
+    background: #c62828;
+    border: 2px solid white;
+    border-radius: 50% 50% 50% 0;
+    transform: translate(-50%, -100%) rotate(-45deg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    cursor: pointer;
   }
-  .form-group textarea { resize: vertical; min-height: 70px; }
-  .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
-
-  /* Map marker detail popup */
-  .leaflet-popup-content { min-width: 200px; font-size: 13px; }
-  .popup-title { font-weight: bold; margin-bottom: 6px; color: var(--green); font-size: 14px; }
-  .popup-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-  .popup-label { color: var(--gray); }
-
-  /* Nara kare toggle */
-  .nara-btn { position: absolute; bottom: 10px; right: 10px; z-index: 500; background: #fff; border: 2px solid #ff6f00; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #ff6f00; font-weight: bold; }
-  .nara-btn.active { background: #ff6f00; color: #fff; }
-
-  /* Empty state */
-  .empty { text-align: center; color: var(--gray); padding: 40px; }
-  .empty-icon { font-size: 40px; margin-bottom: 10px; }
-
-  /* Action row */
-  .action-link { color: var(--green); cursor: pointer; text-decoration: underline; font-size: 12px; margin-right: 6px; }
-  .action-link:hover { color: var(--red); }
-
-  /* Responsive */
-  @media (max-width: 600px) {
-    .form-grid { grid-template-columns: 1fr; }
-    .dashboard-grid { grid-template-columns: 1fr 1fr; }
-    header h1 { font-size: 15px; }
+  .pdf-pin-label {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    margin-top: -22px;
   }
-
-  /* Print */
-  @media print { header, .tabs, .toolbar { display: none; } }
-
-  /* Narakare mode cursor */
-  #map.narakare-mode { cursor: crosshair !important; }
-
-  /* Work type tags */
-  .work-tags { display: flex; gap: 3px; flex-wrap: wrap; }
-  .work-tag { padding: 2px 6px; border-radius: 10px; font-size: 10px; background: #e0e0e0; color: #555; }
-  .work-tag.草刈り { background: #c8e6c9; color: #1b5e20; }
-  .work-tag.剪定 { background: #bbdefb; color: #0d47a1; }
-  .work-tag.伐採 { background: #ffe0b2; color: #e65100; }
-  .work-tag.除草 { background: #f3e5f5; color: #6a1b9a; }
-  .work-tag.その他 { background: #eceff1; color: #546e7a; }
+  .pin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 4px 6px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .editing-banner {
+    background: #fff3cd;
+    border: 1px solid #ffe08a;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    display: none;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🌿 新座市 緑地管理システム</h1>
-  <div class="budget-bar" id="header-budget">総予算: 読込中...</div>
+  <h1>🌳 新座市 緑地管理システム</h1>
+  <div class="hint">地図をクリックして緑地を新規登録できます</div>
 </header>
 
-<div class="tabs">
-  <button class="tab-btn active" onclick="switchTab('dashboard')">📊 ダッシュボード</button>
-  <button class="tab-btn" onclick="switchTab('list')">📋 緑地一覧</button>
-  <button class="tab-btn" onclick="switchTab('map')">🗺️ 地図</button>
-  <button class="tab-btn" onclick="switchTab('alerts')">🔔 アラート</button>
-  <button class="tab-btn" onclick="switchTab('narascan')">🍂 ナラ枯れスキャン</button>
-  <button class="tab-btn" onclick="switchTab('settings')">⚙️ 設定</button>
-</div>
+<div class="layout">
+  <div id="sidebar">
+    <div class="panel-section">
+      <h2>緑地一覧</h2>
+      <button class="add-btn" id="btnAddMode">➕ 地図クリックで緑地を追加</button>
+      <div id="greenList"></div>
+    </div>
+    <div class="panel-section">
+      <h2>保全作業の種別（プルダウン項目）</h2>
+      <div id="typeTags" class="tag-list"></div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="newTypeInput" placeholder="新しい種別名（例：剪定）">
+      </div>
+      <button id="btnAddType">種別を追加</button>
+    </div>
+    <div class="panel-section">
+      <h2>進捗状況の選択肢</h2>
+      <div id="statusTags" class="tag-list"></div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="newStatusInput" placeholder="新しい段階名（例：施工中）">
+      </div>
+      <button id="btnAddStatus">段階を追加</button>
+    </div>
+  </div>
 
-<!-- ========== DASHBOARD ========== -->
-<div id="tab-dashboard" class="tab-pane active">
-  <div class="dashboard-grid" id="dashboard-stats"></div>
-  <div class="budget-progress">
-    <h3>💰 予算執行状況</h3>
-    <div id="budget-detail" style="font-size:13px; margin-bottom:8px; color:var(--gray);"></div>
-    <div class="progress-bar"><div class="progress-fill" id="budget-bar" style="width:0%"></div></div>
-    <div class="budget-labels"><span id="budget-used">使用済み: ¥0</span><span id="budget-total">総予算: ¥0</span></div>
-  </div>
-  <div class="card">
-    <div class="card-title">⚠️ 要対応アラート（上位5件）</div>
-    <div id="dashboard-alerts"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">📅 直近予定（1ヶ月以内）</div>
-    <div id="dashboard-schedule"></div>
-  </div>
-</div>
-
-<!-- ========== LIST ========== -->
-<div id="tab-list" class="tab-pane">
-  <div class="toolbar">
-    <button class="btn btn-green" onclick="openModal()">＋ 緑地を追加</button>
-    <input type="text" id="search-input" placeholder="緑地名・業者名で検索..." oninput="renderTable()">
-    <select id="filter-type" onchange="renderTable()">
-      <option value="">作業種別（全て）</option>
-      <option value="草刈り">草刈り</option>
-      <option value="剪定">剪定</option>
-      <option value="伐採">伐採</option>
-      <option value="除草">除草</option>
-    </select>
-    <select id="filter-status" onchange="renderTable()">
-      <option value="">施工状況（全て）</option>
-      <option value="未着手">未着手</option>
-      <option value="施工中">施工中</option>
-      <option value="完了">完了</option>
-    </select>
-    <select id="filter-contract" onchange="renderTable()">
-      <option value="">契約種別（全て）</option>
-      <option value="単価契約">単価契約</option>
-      <option value="随意契約">随意契約</option>
-      <option value="一般競争">一般競争入札</option>
-      <option value="指名競争">指名競争入札</option>
-    </select>
-    <button class="btn btn-gray" onclick="exportJSON()">📥 JSON書出</button>
-    <button class="btn btn-gray" onclick="document.getElementById('import-file').click()">📤 JSON読込</button>
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
-  </div>
-  <div class="table-wrap">
-    <table id="main-table">
-      <thead>
-        <tr>
-          <th onclick="sortTable('name')">緑地名 ↕</th>
-          <th onclick="sortTable('workTypes')">作業種別 ↕</th>
-          <th onclick="sortTable('scheduledDate')">予定日 ↕</th>
-          <th onclick="sortTable('hasEstimate')">見積 ↕</th>
-          <th onclick="sortTable('estimateAmount')">見積額 ↕</th>
-          <th onclick="sortTable('contractor')">業者 ↕</th>
-          <th onclick="sortTable('contractAmount')">受注額 ↕</th>
-          <th onclick="sortTable('contractType')">契約種別 ↕</th>
-          <th onclick="sortTable('area')">草刈り面積(㎡) ↕</th>
-          <th onclick="sortTable('pruningCount')">剪定(本) ↕</th>
-          <th onclick="sortTable('fellingCount')">伐採(本) ↕</th>
-          <th onclick="sortTable('completionStatus')">施工状況 ↕</th>
-          <th onclick="sortTable('naraKare')">ナラ枯れ ↕</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="table-body"></tbody>
-    </table>
-  </div>
-  <div id="table-empty" class="empty hidden">
-    <div class="empty-icon">🌳</div>
-    <div>緑地データがありません。「緑地を追加」ボタンから登録してください。</div>
-  </div>
-</div>
-
-<!-- ========== MAP ========== -->
-<div id="tab-map" class="tab-pane">
-  <div style="position:relative;height:520px;">
+  <div id="mainArea">
     <div id="map"></div>
-    <button class="nara-btn" id="nara-toggle-btn" onclick="toggleNaraMode()">🍂 ナラ枯れ登録モード</button>
-
-  </div>
-  <div id="nara-mode-notice" style="display:none; background:var(--orange-light); border:1px solid var(--orange); border-radius:6px; padding:10px 14px; margin-top:8px; font-size:13px; color:var(--orange);">
-    📌 地図をクリックしてナラ枯れ疑い箇所を登録できます。もう一度ボタンを押すと解除されます。
-  </div>
-  <div class="map-legend">
-    <strong style="font-size:12px;">凡例：</strong>
-    <div class="legend-item"><div class="legend-dot" style="background:#4caf50;"></div>未着手</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#2196f3;"></div>施工中</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#9e9e9e;"></div>完了</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#f44336;"></div>アラート</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ff6f00;"></div>ナラ枯れ疑い</div>
-  </div>
-  <div class="card" style="margin-top:12px;">
-    <div class="card-title">🍂 ナラ枯れ登録箇所</div>
-    <div id="nara-list"></div>
   </div>
 </div>
 
-<!-- ========== ALERTS ========== -->
-<div id="tab-alerts" class="tab-pane">
-  <div class="card" style="margin-bottom:12px;">
-    <div class="card-title">草刈りアラートの仕組み</div>
-    <div style="font-size:13px; color:var(--gray);">最終草刈り実施日から「草刈り間隔（日）」を超えた緑地に警告を表示します。緑地の設定で間隔を変更できます。</div>
+<div id="detail">
+  <button class="close-btn" id="btnCloseDetail">✕</button>
+  <h2 id="detailName">緑地名</h2>
+
+  <div class="field">
+    <label>緑地名</label>
+    <input type="text" id="editName">
   </div>
-  <div id="alert-list"></div>
+  <div class="field">
+    <label>メモ・備考</label>
+    <textarea id="editMemo" rows="2"></textarea>
+  </div>
+  <button id="btnSaveInfo">基本情報を保存</button>
+  <button class="outline" id="btnRepositionMap">🗺️ 地図上の位置を設定/変更</button>
+  <button class="danger" id="btnDeleteGreen">この緑地を削除</button>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>📄 敷地図（PDF）にプロット</h3>
+  <div class="pdf-wrap">
+    <div class="field">
+      <label>この緑地のPDF敷地図をアップロード</label>
+      <input type="file" id="pdfUpload" accept="application/pdf">
+      <small class="help" id="pdfFileName"></small>
+    </div>
+    <div id="pdfCanvasHolder" style="display:none;">
+      <canvas id="pdfCanvas"></canvas>
+      <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+    </div>
+    <div id="pdfControls" style="display:none; margin-top:8px;">
+      <button class="outline" id="btnPinAddMode">📍 クリックでピンを追加</button>
+      <div id="pinList" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>年度別 予算</h3>
+  <div id="budgetList"></div>
+  <div class="row2">
+    <div class="field"><label>年度</label><input type="number" id="budgetYear" placeholder="2026"></div>
+    <div class="field"><label>予算額（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
+  </div>
+  <button id="btnSetBudget">予算を設定/更新</button>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>保全作業記録の追加</h3>
+  <div class="editing-banner" id="editingBanner">✏️ この記録を編集中です（保存すると上書きされます）</div>
+  <div class="row2">
+    <div class="field"><label>年度</label><input type="number" id="recYear" placeholder="2026"></div>
+    <div class="field"><label>実施日</label><input type="date" id="recDate"></div>
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>作業種別</label>
+      <select id="recType"></select>
+    </div>
+    <div class="field">
+      <label>進捗状況</label>
+      <select id="recStatus"></select>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>入力者</label><input type="text" id="recInputBy" placeholder="例：環境課 田中"></div>
+    <div class="field"><label>発注担当者</label><input type="text" id="recOrderManager" placeholder="例：〇〇造園 鈴木"></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>実施業者</label><input type="text" id="recContractor" placeholder="〇〇造園株式会社"></div>
+    <div class="field"><label>費用（円）</label><input type="number" id="recCost" placeholder="120000"></div>
+  </div>
+  <div class="field">
+    <label>作業前の写真</label>
+    <input type="file" id="recPhoto" accept="image/*">
+    <img id="recPhotoPreview" class="photo-thumb" style="display:none;">
+  </div>
+  <button id="btnAddRecord">記録を追加</button>
+  <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>作業履歴</h3>
+  <div id="recordTableWrap"></div>
 </div>
 
-<!-- ========== NARA SCAN ========== -->
-<div id="tab-narascan" class="tab-pane">
-  <div class="card" style="margin-bottom:12px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div>
-        <h3 style="color:#e65100;margin-bottom:4px;">🍂 ナラ枯れリスク 一括スキャン</h3>
-        <div style="font-size:13px;color:var(--gray);">登録済み全緑地のメモ・作業種別・樹木情報をAIが総合分析し、ナラ枯れリスクの高い箇所を洗い出します。</div>
-      </div>
-      <button class="btn" style="background:#e65100;color:#fff;white-space:nowrap;" onclick="runNaraScan()">🤖 一括スキャン実行</button>
-    </div>
-  </div>
-  <div id="narascan-result"></div>
+<div class="modal-overlay" id="photoModal">
+  <img id="photoModalImg">
 </div>
 
-<!-- ========== SETTINGS ========== -->
-<div id="tab-settings" class="tab-pane">
-  <div class="card">
-    <h3 style="margin-bottom:14px; color:var(--green);">⚙️ システム設定</h3>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>市区町村名</label>
-        <input type="text" id="cfg-city" placeholder="例：新座市">
-      </div>
-      <div class="form-group">
-        <label>年度総予算（円）</label>
-        <input type="number" id="cfg-budget" placeholder="例：8000000">
-      </div>
-      <div class="form-group">
-        <label>地図初期位置（緯度）</label>
-        <input type="number" id="cfg-lat" step="0.0001" placeholder="35.7937">
-      </div>
-      <div class="form-group">
-        <label>地図初期位置（経度）</label>
-        <input type="number" id="cfg-lng" step="0.0001" placeholder="139.5237">
-      </div>
-      <div class="form-group">
-        <label>草刈りデフォルト間隔（日）</label>
-        <input type="number" id="cfg-interval" value="60" min="1">
-      </div>
-      <div class="form-group">
-        <label>アラート警告日数（X日前）</label>
-        <input type="number" id="cfg-warn" value="14" min="1">
-      </div>
-      <div class="form-group full">
-        <label>Anthropic API キー（ナラ枯れAI判定に使用）</label>
-        <input type="password" id="cfg-apikey" placeholder="sk-ant-...">
-        <div style="font-size:11px;color:var(--gray);margin-top:3px;">キーはブラウザのlocalStorageにのみ保存されます。外部には送信されません（Anthropic APIへの直接通信を除く）。</div>
-      </div>
-    </div>
-    <div style="margin-top:16px; display:flex; gap:8px;">
-      <button class="btn btn-green" onclick="saveSettings()">設定を保存</button>
-      <button class="btn btn-gray" onclick="clearAllData()">全データ削除</button>
-    </div>
-  </div>
-  <div class="card" style="margin-top:12px;">
-    <h3 style="margin-bottom:10px; color:var(--green);">🌳 緑地名マスタ管理</h3>
-    <div style="font-size:13px;color:var(--gray);margin-bottom:10px;">緑地追加フォームのプルダウンに表示する緑地名を管理します。</div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;">
-      <input type="text" id="cfg-new-name" placeholder="新しい緑地名を入力..." style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;" onkeydown="if(event.key==='Enter')addGreenSpaceName()">
-      <button class="btn btn-green" onclick="addGreenSpaceName()">追加</button>
-    </div>
-    <div id="cfg-name-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;"></div>
-  </div>
-  <div class="card" style="margin-top:12px;">
-    <h3 style="margin-bottom:10px; color:var(--green);">📋 サンプルデータ</h3>
-    <div style="font-size:13px; color:var(--gray); margin-bottom:10px;">初めて使う場合はサンプルデータを読み込んで機能を確認できます。</div>
-    <button class="btn btn-orange" onclick="loadSampleData()">サンプルデータを読み込む</button>
-  </div>
-</div>
-
-<!-- ========== MODAL ========== -->
-<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModalOutside(event)">
-  <div class="modal" id="modal">
-    <div class="modal-header">
-      <h2 id="modal-title">緑地を追加</h2>
-      <button class="modal-close" onclick="closeModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="edit-id">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>緑地名 *</label>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <select id="f-name" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;">
-              <option value="">-- 緑地名を選択 --</option>
-            </select>
-            <button type="button" class="btn btn-gray btn-sm" onclick="addNewGreenSpaceName()" title="新しい緑地名を追加">＋ 新規</button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>作業種別（複数選択可）</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; padding:6px 0;">
-            <label style="display:flex;align-items:center;gap:4px;font-weight:normal;"><input type="checkbox" value="草刈り" class="work-check"> 草刈り</label>
-            <label style="display:flex;align-items:center;gap:4px;font-weight:normal;"><input type="checkbox" value="剪定" class="work-check"> 剪定</label>
-            <label style="display:flex;align-items:center;gap:4px;font-weight:normal;"><input type="checkbox" value="伐採" class="work-check"> 伐採</label>
-            <label style="display:flex;align-items:center;gap:4px;font-weight:normal;"><input type="checkbox" value="除草" class="work-check"> 除草</label>
-            <label style="display:flex;align-items:center;gap:4px;font-weight:normal;"><input type="checkbox" value="その他" class="work-check"> その他</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>施工予定日</label>
-          <input type="date" id="f-scheduledDate">
-        </div>
-        <div class="form-group">
-          <label>草刈り面積（㎡）</label>
-          <input type="number" id="f-area" min="0" placeholder="草刈り対象面積">
-        </div>
-        <div class="form-group">
-          <label>剪定本数（本）</label>
-          <input type="number" id="f-pruningCount" min="0">
-        </div>
-        <div class="form-group">
-          <label>伐採本数（本）</label>
-          <input type="number" id="f-fellingCount" min="0">
-        </div>
-        <div class="form-group">
-          <label>施工状況</label>
-          <select id="f-completionStatus">
-            <option value="未着手">未着手</option>
-            <option value="施工中">施工中</option>
-            <option value="完了">完了</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>施工完了日</label>
-          <input type="date" id="f-completionDate">
-        </div>
-        <div class="form-group">
-          <label>見積あり</label>
-          <select id="f-hasEstimate">
-            <option value="false">なし</option>
-            <option value="true">あり</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>見積額（円）</label>
-          <input type="number" id="f-estimateAmount" min="0">
-        </div>
-        <div class="form-group full">
-          <label>見積内容</label>
-          <textarea id="f-estimateDetails" placeholder="見積の具体的な内容..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>業者名</label>
-          <input type="text" id="f-contractor" placeholder="例：○○造園">
-        </div>
-        <div class="form-group">
-          <label>受注額（円）</label>
-          <input type="number" id="f-contractAmount" min="0">
-        </div>
-        <div class="form-group">
-          <label>契約種別</label>
-          <select id="f-contractType">
-            <option value="">未定</option>
-            <option value="単価契約">単価契約</option>
-            <option value="随意契約">随意契約</option>
-            <option value="一般競争">一般競争入札</option>
-            <option value="指名競争">指名競争入札</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>草刈り間隔（日）</label>
-          <input type="number" id="f-mowInterval" min="1" value="60">
-        </div>
-        <div class="form-group">
-          <label>最終草刈り実施日</label>
-          <input type="date" id="f-lastMowDate">
-        </div>
-        <div class="form-group full">
-          <label>現状・施工後の状態メモ</label>
-          <textarea id="f-statusNote" placeholder="現在の状況、施工後の変化など..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>緯度（地図位置）</label>
-          <input type="number" id="f-lat" step="0.00001" placeholder="例：35.7000">
-        </div>
-        <div class="form-group">
-          <label>経度（地図位置）</label>
-          <input type="number" id="f-lng" step="0.00001" placeholder="例：139.7000">
-        </div>
-        <div class="form-group full">
-          <label>🍂 ナラ枯れ判定（AI自動判定）</label>
-          <div id="f-nara-display" style="padding:8px 12px;border:1px solid var(--border);border-radius:5px;font-size:13px;background:#f9f9f9;color:var(--gray);">未判定</div>
-          <input type="hidden" id="f-naraKare">
-          <input type="hidden" id="f-naraJudgedAt">
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-gray" onclick="closeModal()">キャンセル</button>
-      <button class="btn btn-green" onclick="saveRecord()">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- ========== NARA JUDGE MODAL ========== -->
-<div class="modal-overlay hidden" id="nara-modal-overlay" onclick="closeNaraModalOutside(event)">
-  <div class="modal" style="max-width:520px;">
-    <div class="modal-header" style="background:#e65100;">
-      <h2>🍂 ナラ枯れ AI判定</h2>
-      <button class="modal-close" onclick="closeNaraModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div id="nara-judge-space-name" style="font-weight:bold;font-size:15px;margin-bottom:12px;color:#333;"></div>
-      <div style="font-size:13px;color:var(--gray);margin-bottom:12px;">
-        現地の樹木の写真をアップロードしてください。AIがナラ枯れの疑いを判定します。<br>
-        <span style="color:#e65100;">※ 葉・幹・根元が写っている写真が判定精度を上げます。</span>
-      </div>
-      <div id="nara-drop-zone" style="border:2px dashed #ccc;border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:#fafafa;transition:border-color 0.2s;" onclick="document.getElementById('nara-photo-input').click()" ondragover="event.preventDefault();this.style.borderColor='#e65100'" ondragleave="this.style.borderColor='#ccc'" ondrop="handleNaraDrop(event)">
-        <div style="font-size:32px;margin-bottom:8px;">📷</div>
-        <div style="font-size:13px;color:var(--gray);">クリックまたはドラッグ&ドロップで写真を選択</div>
-        <input type="file" id="nara-photo-input" accept="image/*" style="display:none" onchange="onNaraPhotoSelected(event)">
-      </div>
-      <div id="nara-preview-wrap" style="display:none;margin-top:12px;text-align:center;">
-        <img id="nara-preview-img" style="max-width:100%;max-height:240px;border-radius:6px;border:1px solid #ddd;">
-      </div>
-      <div id="nara-result" style="display:none;margin-top:16px;"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-gray" onclick="closeNaraModal()">閉じる</button>
-      <button class="btn" id="nara-judge-btn" style="background:#e65100;color:#fff;" onclick="runNaraJudge()" disabled>AIで判定する</button>
-    </div>
-  </div>
-</div>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
-// ============================
-// DATA MODEL
-// ============================
-let db = {
-  settings: {
-    city: '新座市',
-    totalBudget: 10000000,
-    lat: 35.7937,
-    lng: 139.5237,
-    mowIntervalDefault: 60,
-    alertWarnDays: 14,
-    apiKey: '',
-    greenSpaceNames: [
-      '野火止用水 緑道（新座駅北側）',
-      '黒目川 右岸緑地（栄四丁目付近）',
-      '黒目川 左岸緑地（東北部）',
-      '平林寺隣接市有林（野火止）',
-      '新座市民総合体育館 周辺緑地',
-      '道場四丁目 調整池周辺緑地',
-      '新座駅南口 ロータリー植栽帯',
-      '志木駅前 植栽帯',
-      '片山公園 里山ゾーン',
-      '新堀緑道',
-      '大和田緑地',
-      '栄緑道',
-      '池田緑地',
-      '菅沢緑地',
-      '馬場緑地',
-      '新座市役所 周辺植栽帯',
-    ]
-  },
-  spaces: [],
-  naraKarePoints: []
-};
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-let sortKey = 'name';
-let sortDir = 1;
-let naraMode = false;
-let map = null;
-let markers = [];
-let naraMarkers = [];
-let mapInit = false;
+const STORAGE_KEY = 'niiza_green_spaces_v2';
+const TYPES_KEY = 'niiza_green_types_v1';
+const STATUS_KEY = 'niiza_green_status_v1';
+const DEFAULT_TYPES = ['草刈り', '剪定', '除草', '清掃', '点検', '植栽', 'その他'];
+const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了'];
+const NIIZA_CENTER = [35.7768, 139.5589];
 
-function load() {
-  const raw = localStorage.getItem('ryokuchi-db');
-  if (raw) {
-    try { db = JSON.parse(raw); } catch(e) {}
-  }
+let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let types = JSON.parse(localStorage.getItem(TYPES_KEY) || 'null') || DEFAULT_TYPES.slice();
+let statuses = JSON.parse(localStorage.getItem(STATUS_KEY) || 'null') || DEFAULT_STATUSES.slice();
+
+let addMode = false;            // create new green space via map click
+let repositionTargetId = null;  // move existing green space's map pin
+let currentId = null;
+let editingRecordId = null;
+let pinAddMode = false;
+let markers = {};
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(types)); }
+function saveStatuses() { localStorage.setItem(STATUS_KEY, JSON.stringify(statuses)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function save() {
-  localStorage.setItem('ryokuchi-db', JSON.stringify(db));
-}
+// ---- Map ----
+const map = L.map('map').setView(NIIZA_CENTER, 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
-}
-
-// ============================
-// TABS
-// ============================
-function switchTab(name) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
-  if (name === 'map') initMap();
-  if (name === 'alerts') renderAlerts();
-  if (name === 'dashboard') renderDashboard();
-  if (name === 'list') renderTable();
-  if (name === 'narascan') renderNaraScanInit();
-  if (name === 'settings') renderNameList();
-}
-
-// ============================
-// FORMAT HELPERS
-// ============================
-function yen(n) {
-  if (!n && n !== 0) return '-';
-  return '¥' + Number(n).toLocaleString();
-}
-function dateStr(d) {
-  if (!d) return '-';
-  return d.replace(/-/g, '/');
-}
-function daysSince(dateStr) {
-  if (!dateStr) return null;
-  return Math.floor((new Date() - new Date(dateStr)) / 86400000);
-}
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  return Math.floor((new Date(dateStr) - new Date()) / 86400000);
-}
-
-// ============================
-// DASHBOARD
-// ============================
-function renderDashboard() {
-  const spaces = db.spaces;
-  const totalBudget = db.settings.totalBudget || 0;
-  const totalContracted = spaces.reduce((s,x) => s + (Number(x.contractAmount)||0), 0);
-  const completed = spaces.filter(x => x.completionStatus === '完了').length;
-  const alerts = getAlerts();
-  const naraCount = spaces.filter(x => x.naraKare).length + (db.naraKarePoints||[]).length;
-
-  document.getElementById('dashboard-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">登録緑地数</div><div class="stat-value">${spaces.length}<span style="font-size:14px;">件</span></div></div>
-    <div class="stat-card blue"><div class="stat-label">施工完了</div><div class="stat-value">${completed}<span style="font-size:14px;">件</span></div><div class="stat-sub">${spaces.length ? Math.round(completed/spaces.length*100) : 0}%</div></div>
-    <div class="stat-card orange"><div class="stat-label">アラート</div><div class="stat-value">${alerts.length}<span style="font-size:14px;">件</span></div></div>
-    <div class="stat-card red"><div class="stat-label">ナラ枯れ疑い</div><div class="stat-value">${naraCount}<span style="font-size:14px;">箇所</span></div></div>
-    <div class="stat-card"><div class="stat-label">受注総額</div><div class="stat-value" style="font-size:15px;">${yen(totalContracted)}</div></div>
-    <div class="stat-card orange"><div class="stat-label">残予算</div><div class="stat-value" style="font-size:15px;">${yen(totalBudget - totalContracted)}</div></div>
-  `;
-
-  const pct = totalBudget ? Math.min(100, totalContracted / totalBudget * 100) : 0;
-  const bar = document.getElementById('budget-bar');
-  bar.style.width = pct + '%';
-  bar.className = 'progress-fill ' + (pct >= 95 ? 'over' : pct >= 75 ? 'warn' : 'ok');
-  document.getElementById('budget-used').textContent = '使用済み: ' + yen(totalContracted);
-  document.getElementById('budget-total').textContent = '総予算: ' + yen(totalBudget);
-  document.getElementById('budget-detail').textContent = `${pct.toFixed(1)}% 使用 ／ 残り ${yen(totalBudget - totalContracted)}`;
-  document.getElementById('header-budget').innerHTML = `${db.settings.city} 残予算: <span>${yen(totalBudget - totalContracted)}</span>`;
-
-  const alertsEl = document.getElementById('dashboard-alerts');
-  const top5 = alerts.slice(0, 5);
-  if (!top5.length) { alertsEl.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:8px 0;">アラートはありません ✅</div>'; }
-  else alertsEl.innerHTML = top5.map(a => alertHTML(a)).join('');
-
-  const schedEl = document.getElementById('dashboard-schedule');
-  const soon = spaces.filter(x => { const d = daysUntil(x.scheduledDate); return d !== null && d >= 0 && d <= 30; })
-    .sort((a,b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-  if (!soon.length) { schedEl.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:8px 0;">1ヶ月以内の予定はありません</div>'; }
-  else schedEl.innerHTML = soon.map(x => `
-    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;">
-      <span>${x.name}</span>
-      <span><span class="badge ${daysUntil(x.scheduledDate)<=7?'badge-red':'badge-orange'}">${dateStr(x.scheduledDate)}</span></span>
-    </div>
-  `).join('');
-}
-
-// ============================
-// ALERTS
-// ============================
-function getAlerts() {
-  const alerts = [];
-  const warnDays = db.settings.alertWarnDays || 14;
-  const today = new Date();
-
-  for (const s of db.spaces) {
-    if (s.completionStatus === '完了') continue;
-    // Mow alert
-    if (s.workTypes && s.workTypes.includes('草刈り') || s.lastMowDate) {
-      const interval = s.mowInterval || db.settings.mowIntervalDefault || 60;
-      const since = daysSince(s.lastMowDate);
-      if (since !== null) {
-        const remaining = interval - since;
-        if (remaining <= 0) {
-          alerts.push({ type: 'mow', level: 'high', name: s.name, msg: `草刈りが${Math.abs(remaining)}日超過しています（${interval}日間隔）`, id: s.id });
-        } else if (remaining <= warnDays) {
-          alerts.push({ type: 'mow', level: 'mid', name: s.name, msg: `草刈り期限まで${remaining}日（${interval}日間隔）`, id: s.id });
-        }
-      } else if (s.workTypes && s.workTypes.includes('草刈り')) {
-        alerts.push({ type: 'mow', level: 'low', name: s.name, msg: '最終草刈り日が未設定です', id: s.id });
-      }
+map.on('click', (e) => {
+  if (repositionTargetId) {
+    const gs = getGreen(repositionTargetId);
+    if (gs) {
+      gs.lat = e.latlng.lat;
+      gs.lng = e.latlng.lng;
+      save();
+      renderAll();
+      if (currentId === gs.id) openDetail(gs.id);
     }
-    // No estimate alert
-    if (!s.hasEstimate && s.workTypes && s.workTypes.length > 0) {
-      alerts.push({ type: 'estimate', level: 'low', name: s.name, msg: '見積が未取得です', id: s.id });
-    }
-    // Nara kare
-    if (s.naraKare) {
-      alerts.push({ type: 'nara', level: 'high', name: s.name, msg: '🍂 ナラ枯れ疑いあり — 現地確認・伐採検討が必要です', id: s.id });
-    }
-    // Schedule overdue
-    if (s.scheduledDate && s.completionStatus !== '完了') {
-      const d = daysUntil(s.scheduledDate);
-      if (d !== null && d < -7) {
-        alerts.push({ type: 'overdue', level: 'high', name: s.name, msg: `施工予定日を${Math.abs(d)}日超過しています（${dateStr(s.scheduledDate)}予定）`, id: s.id });
-      }
-    }
-  }
-  // Sort by level
-  const order = { high:0, mid:1, low:2 };
-  return alerts.sort((a,b) => order[a.level] - order[b.level]);
-}
-
-function alertHTML(a) {
-  const icon = a.type === 'mow' ? '🌿' : a.type === 'nara' ? '🍂' : a.type === 'overdue' ? '📅' : '📋';
-  return `<div class="alert-item ${a.level}">
-    <div class="alert-icon">${icon}</div>
-    <div>
-      <div class="alert-name">${a.name}</div>
-      <div class="alert-desc">${a.msg}</div>
-    </div>
-    <div style="margin-left:auto;"><span class="action-link" onclick="editById('${a.id}')">編集</span></div>
-  </div>`;
-}
-
-function renderAlerts() {
-  const alerts = getAlerts();
-  const el = document.getElementById('alert-list');
-  if (!alerts.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div>現在アラートはありません</div></div>';
+    repositionTargetId = null;
+    document.getElementById('btnRepositionMap').textContent = '🗺️ 地図上の位置を設定/変更';
     return;
   }
-  el.innerHTML = alerts.map(a => alertHTML(a)).join('');
+  if (!addMode) return;
+  const name = prompt('緑地名を入力してください', '新しい緑地');
+  if (!name) return;
+  const gs = {
+    id: uid(), name,
+    lat: e.latlng.lat, lng: e.latlng.lng,
+    memo: '', budgets: {}, records: [],
+    pdf: null, pdfName: null, pdfPins: []
+  };
+  data.push(gs);
+  save();
+  renderAll();
+  addMode = false;
+  document.getElementById('btnAddMode').textContent = '➕ 地図クリックで緑地を追加';
+  openDetail(gs.id);
+});
+
+document.getElementById('btnAddMode').addEventListener('click', () => {
+  addMode = !addMode;
+  document.getElementById('btnAddMode').textContent = addMode
+    ? '🖱️ 地図上をクリックして配置...（再クリックでキャンセル）'
+    : '➕ 地図クリックで緑地を追加';
+});
+
+document.getElementById('btnRepositionMap').addEventListener('click', () => {
+  if (!currentId) return;
+  repositionTargetId = repositionTargetId ? null : currentId;
+  document.getElementById('btnRepositionMap').textContent = repositionTargetId
+    ? '🖱️ 地図上をクリックして位置を設定...'
+    : '🗺️ 地図上の位置を設定/変更';
+});
+
+function renderMarkers() {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  data.forEach(gs => {
+    if (gs.lat == null || gs.lng == null) return;
+    const marker = L.marker([gs.lat, gs.lng]).addTo(map);
+    marker.bindTooltip(gs.name);
+    marker.on('click', () => openDetail(gs.id));
+    markers[gs.id] = marker;
+  });
 }
 
-// ============================
-// TABLE
-// ============================
-function renderTable() {
-  const q = (document.getElementById('search-input').value || '').toLowerCase();
-  const fType = document.getElementById('filter-type').value;
-  const fStatus = document.getElementById('filter-status').value;
-  const fContract = document.getElementById('filter-contract').value;
-
-  let rows = db.spaces.filter(s => {
-    if (q && !s.name.toLowerCase().includes(q) && !(s.contractor||'').toLowerCase().includes(q)) return false;
-    if (fType && !(s.workTypes||[]).includes(fType)) return false;
-    if (fStatus && s.completionStatus !== fStatus) return false;
-    if (fContract && s.contractType !== fContract) return false;
-    return true;
-  });
-
-  rows.sort((a,b) => {
-    let av = a[sortKey], bv = b[sortKey];
-    if (Array.isArray(av)) av = (av||[]).join(',');
-    if (Array.isArray(bv)) bv = (bv||[]).join(',');
-    if (av === null || av === undefined) av = '';
-    if (bv === null || bv === undefined) bv = '';
-    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir;
-    return String(av).localeCompare(String(bv), 'ja') * sortDir;
-  });
-
-  const tbody = document.getElementById('table-body');
-  const empty = document.getElementById('table-empty');
-
-  if (!rows.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
+// ---- Sidebar list ----
+function renderGreenList() {
+  const wrap = document.getElementById('greenList');
+  wrap.innerHTML = '';
+  if (data.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">まだ緑地が登録されていません。<br>地図クリックで追加してください。</div>';
     return;
   }
-  empty.classList.add('hidden');
+  data.forEach(gs => {
+    const div = document.createElement('div');
+    div.className = 'green-item' + (gs.id === currentId ? ' active' : '');
+    const totalSpent = gs.records.reduce((s, r) => s + Number(r.cost || 0), 0);
+    const latest = gs.records.slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''))[0];
+    div.innerHTML = `<div class="name">${escapeHtml(gs.name)} ${gs.pdf ? '📄' : ''}</div>
+      <div class="sub">記録数: ${gs.records.length}件 / 総支出: ¥${totalSpent.toLocaleString()}</div>
+      ${latest ? `<div class="sub">最新: <span class="status-badge">${escapeHtml(latest.status||'-')}</span></div>` : ''}`;
+    div.addEventListener('click', () => {
+      if (gs.lat != null) map.setView([gs.lat, gs.lng], 16);
+      openDetail(gs.id);
+    });
+    wrap.appendChild(div);
+  });
+}
 
-  tbody.innerHTML = rows.map(s => {
-    const statusBadge = s.completionStatus === '完了' ? 'badge-gray' : s.completionStatus === '施工中' ? 'badge-blue' : 'badge-green';
-    const workTags = (s.workTypes||[]).map(w => `<span class="work-tag ${w}">${w}</span>`).join('');
-    const mowAlert = getMowAlert(s);
-    const naraIcon = s.naraKare ? '🍂' : '';
-    return `<tr>
-      <td>${mowAlert ? '<span title="'+mowAlert+'" style="color:var(--red);">⚠️</span> ' : ''}${s.name}${naraIcon}</td>
-      <td><div class="work-tags">${workTags || '-'}</div></td>
-      <td>${dateStr(s.scheduledDate)}</td>
-      <td>${s.hasEstimate ? '<span class="badge badge-green">あり</span>' : '<span class="badge badge-gray">なし</span>'}</td>
-      <td>${yen(s.estimateAmount)}</td>
-      <td>${s.contractor || '-'}</td>
-      <td>${yen(s.contractAmount)}</td>
-      <td>${s.contractType ? `<span class="badge badge-blue">${s.contractType}</span>` : '-'}</td>
-      <td>${s.area ? s.area.toLocaleString() : '-'}</td>
-      <td>${s.pruningCount != null ? s.pruningCount + '本' : '-'}</td>
-      <td>${s.fellingCount != null ? s.fellingCount + '本' : '-'}</td>
-      <td><span class="badge ${statusBadge}">${s.completionStatus||'未着手'}</span></td>
-      <td>
-        ${s.naraKare === true ? '<span class="badge badge-red">疑いあり</span>' : s.naraKare === false && s.naraJudgedAt ? '<span class="badge badge-green">問題なし</span>' : '<span class="badge badge-gray">未判定</span>'}
-        <span class="action-link" onclick="openNaraJudge('${s.id}')" title="AI判定">🤖</span>
-      </td>
-      <td>
-        <span class="action-link" onclick="editById('${s.id}')">編集</span>
-        <span class="action-link" onclick="deleteById('${s.id}')">削除</span>
-      </td>
-    </tr>`;
+// ---- Type tags ----
+function renderTypeTags() {
+  const wrap = document.getElementById('typeTags');
+  wrap.innerHTML = '';
+  types.forEach((t, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(t)}</span><button data-i="${i}">✕</button>`;
+    tag.querySelector('button').addEventListener('click', () => {
+      types.splice(i, 1);
+      saveTypes(); renderTypeTags(); renderRecTypeSelect();
+    });
+    wrap.appendChild(tag);
+  });
+}
+document.getElementById('btnAddType').addEventListener('click', () => {
+  const input = document.getElementById('newTypeInput');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!types.includes(v)) types.push(v);
+  saveTypes(); input.value = ''; renderTypeTags(); renderRecTypeSelect();
+});
+function renderRecTypeSelect() {
+  const sel = document.getElementById('recType');
+  const prev = sel.value;
+  sel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (types.includes(prev)) sel.value = prev;
+}
+
+// ---- Status tags ----
+function renderStatusTags() {
+  const wrap = document.getElementById('statusTags');
+  wrap.innerHTML = '';
+  statuses.forEach((s, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(s)}</span><button data-i="${i}">✕</button>`;
+    tag.querySelector('button').addEventListener('click', () => {
+      statuses.splice(i, 1);
+      saveStatuses(); renderStatusTags(); renderRecStatusSelect();
+    });
+    wrap.appendChild(tag);
+  });
+}
+document.getElementById('btnAddStatus').addEventListener('click', () => {
+  const input = document.getElementById('newStatusInput');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!statuses.includes(v)) statuses.push(v);
+  saveStatuses(); input.value = ''; renderStatusTags(); renderRecStatusSelect();
+});
+function renderRecStatusSelect() {
+  const sel = document.getElementById('recStatus');
+  const prev = sel.value;
+  sel.innerHTML = statuses.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  if (statuses.includes(prev)) sel.value = prev;
+}
+
+// ---- Detail panel ----
+function getGreen(id) { return data.find(g => g.id === id); }
+
+function openDetail(id) {
+  currentId = id;
+  const gs = getGreen(id);
+  if (!gs) return;
+  resetRecordForm();
+  document.getElementById('detail').style.display = 'block';
+  document.getElementById('detailName').textContent = gs.name;
+  document.getElementById('editName').value = gs.name;
+  document.getElementById('editMemo').value = gs.memo || '';
+  renderBudgetList(gs);
+  renderRecordTable(gs);
+  renderPdfSection(gs);
+  renderGreenList();
+}
+
+document.getElementById('btnCloseDetail').addEventListener('click', () => {
+  document.getElementById('detail').style.display = 'none';
+  currentId = null;
+  renderGreenList();
+});
+
+document.getElementById('btnSaveInfo').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  gs.name = document.getElementById('editName').value.trim() || gs.name;
+  gs.memo = document.getElementById('editMemo').value;
+  save();
+  document.getElementById('detailName').textContent = gs.name;
+  renderMarkers(); renderGreenList();
+});
+
+document.getElementById('btnDeleteGreen').addEventListener('click', () => {
+  if (!confirm('この緑地を削除しますか？関連する全記録も削除されます。')) return;
+  data = data.filter(g => g.id !== currentId);
+  save();
+  document.getElementById('detail').style.display = 'none';
+  currentId = null;
+  renderAll();
+});
+
+// ---- Budget ----
+function renderBudgetList(gs) {
+  const wrap = document.getElementById('budgetList');
+  const years = Object.keys(gs.budgets).sort((a, b) => b - a);
+  if (years.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">予算未設定</div>';
+    return;
+  }
+  wrap.innerHTML = years.map(y => {
+    const budget = gs.budgets[y];
+    const spent = gs.records.filter(r => String(r.year) === String(y))
+      .reduce((s, r) => s + Number(r.cost || 0), 0);
+    const remain = budget - spent;
+    return `<div class="budget-line">
+      <div><b>${y}年度</b> 予算: ¥${Number(budget).toLocaleString()}</div>
+      <div>支出合計: ¥${spent.toLocaleString()}</div>
+      <div class="remain ${remain < 0 ? 'over' : ''}">残額: ¥${remain.toLocaleString()} ${remain < 0 ? '（予算超過）' : ''}</div>
+    </div>`;
   }).join('');
 }
 
-function getMowAlert(s) {
-  if (!(s.workTypes||[]).includes('草刈り')) return null;
-  if (s.completionStatus === '完了') return null;
-  const interval = s.mowInterval || db.settings.mowIntervalDefault || 60;
-  const since = daysSince(s.lastMowDate);
-  if (since === null) return '最終草刈り日未設定';
-  const remaining = interval - since;
-  if (remaining <= 0) return `草刈り${Math.abs(remaining)}日超過`;
-  if (remaining <= (db.settings.alertWarnDays||14)) return `草刈り期限${remaining}日前`;
-  return null;
-}
-
-function sortTable(key) {
-  if (sortKey === key) sortDir *= -1;
-  else { sortKey = key; sortDir = 1; }
-  renderTable();
-}
-
-// ============================
-// MODAL
-// ============================
-function openModal(data) {
-  populateNameSelect();
-  document.getElementById('modal-title').textContent = data ? '緑地を編集' : '緑地を追加';
-  document.getElementById('edit-id').value = data ? data.id : '';
-  const f = (id, val) => { const el = document.getElementById(id); if(el) el.value = val ?? ''; };
-  f('f-name', data?.name);
-  f('f-scheduledDate', data?.scheduledDate);
-  f('f-area', data?.area);
-  f('f-pruningCount', data?.pruningCount);
-  f('f-fellingCount', data?.fellingCount);
-  f('f-completionStatus', data?.completionStatus || '未着手');
-  f('f-completionDate', data?.completionDate);
-  f('f-hasEstimate', data?.hasEstimate ? 'true' : 'false');
-  f('f-estimateAmount', data?.estimateAmount);
-  f('f-estimateDetails', data?.estimateDetails);
-  f('f-contractor', data?.contractor);
-  f('f-contractAmount', data?.contractAmount);
-  f('f-contractType', data?.contractType || '');
-  f('f-mowInterval', data?.mowInterval || db.settings.mowIntervalDefault || 60);
-  f('f-lastMowDate', data?.lastMowDate);
-  f('f-statusNote', data?.statusNote);
-  f('f-lat', data?.lat);
-  f('f-lng', data?.lng);
-  document.getElementById('f-naraKare').value = data?.naraKare ?? '';
-  document.getElementById('f-naraJudgedAt').value = data?.naraJudgedAt ?? '';
-  const nd = document.getElementById('f-nara-display');
-  if (data?.naraJudgedAt) {
-    nd.textContent = data.naraKare ? '🍂 疑いあり（AI判定済）' : '✅ 問題なし（AI判定済）';
-    nd.style.color = data.naraKare ? '#e65100' : '#2d7a3a';
-  } else {
-    nd.textContent = '未判定（一覧画面の🤖ボタンからAI判定できます）';
-    nd.style.color = 'var(--gray)';
-  }
-  document.querySelectorAll('.work-check').forEach(cb => {
-    cb.checked = (data?.workTypes||[]).includes(cb.value);
-  });
-  document.getElementById('modal-overlay').classList.remove('hidden');
-}
-
-function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
-function closeModalOutside(e) { if (e.target.id === 'modal-overlay') closeModal(); }
-
-function saveRecord() {
-  const name = document.getElementById('f-name').value;
-  if (!name) { alert('緑地名を選択してください'); return; }
-  const workTypes = Array.from(document.querySelectorAll('.work-check:checked')).map(c => c.value);
-  const id = document.getElementById('edit-id').value;
-  const rec = {
-    id: id || uid(),
-    name,
-    workTypes,
-    scheduledDate: document.getElementById('f-scheduledDate').value || null,
-    area: Number(document.getElementById('f-area').value) || null,
-    pruningCount: Number(document.getElementById('f-pruningCount').value) || null,
-    fellingCount: Number(document.getElementById('f-fellingCount').value) || null,
-    completionStatus: document.getElementById('f-completionStatus').value,
-    completionDate: document.getElementById('f-completionDate').value || null,
-    hasEstimate: document.getElementById('f-hasEstimate').value === 'true',
-    estimateAmount: Number(document.getElementById('f-estimateAmount').value) || null,
-    estimateDetails: document.getElementById('f-estimateDetails').value,
-    contractor: document.getElementById('f-contractor').value,
-    contractAmount: Number(document.getElementById('f-contractAmount').value) || null,
-    contractType: document.getElementById('f-contractType').value,
-    mowInterval: Number(document.getElementById('f-mowInterval').value) || 60,
-    lastMowDate: document.getElementById('f-lastMowDate').value || null,
-    statusNote: document.getElementById('f-statusNote').value,
-    lat: parseFloat(document.getElementById('f-lat').value) || null,
-    lng: parseFloat(document.getElementById('f-lng').value) || null,
-    naraKare: document.getElementById('f-naraKare').value === 'true' ? true : document.getElementById('f-naraKare').value === 'false' ? false : null,
-    naraJudgedAt: document.getElementById('f-naraJudgedAt').value || null,
-    updatedAt: new Date().toISOString()
-  };
-
-  if (id) {
-    const idx = db.spaces.findIndex(s => s.id === id);
-    if (idx >= 0) db.spaces[idx] = rec;
-  } else {
-    db.spaces.push(rec);
-  }
+document.getElementById('btnSetBudget').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const year = document.getElementById('budgetYear').value;
+  const amount = document.getElementById('budgetAmount').value;
+  if (!year || amount === '') { alert('年度と予算額を入力してください'); return; }
+  gs.budgets[year] = Number(amount);
   save();
-  closeModal();
-  renderTable();
-  renderDashboard();
-  if (mapInit) renderMapMarkers();
-}
-
-function editById(id) {
-  const s = db.spaces.find(x => x.id === id);
-  if (s) openModal(s);
-}
-
-function deleteById(id) {
-  if (!confirm('この緑地を削除しますか？')) return;
-  db.spaces = db.spaces.filter(x => x.id !== id);
-  save();
-  renderTable();
-  renderDashboard();
-  if (mapInit) renderMapMarkers();
-}
-
-// ============================
-// MAP
-// ============================
-function initMap() {
-  if (mapInit) { renderMapMarkers(); return; }
-  mapInit = true;
-  map = L.map('map').setView([db.settings.lat || 35.7, db.settings.lng || 139.7], 14);
-
-  // 国土地理院 最新写真（シームレス）
-  const gsiPhoto = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
-    attribution: '国土地理院 <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">最新写真（シームレス）</a>',
-    maxZoom: 18
-  });
-  // 国土地理院 標準地図
-  const gsiStd = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-    attribution: '国土地理院 <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">標準地図</a>',
-    maxZoom: 18
-  });
-  // ESRI衛星写真
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri',
-    maxZoom: 19
-  });
-  // OpenStreetMap
-  const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom: 19
-  });
-  gsiPhoto.addTo(map);
-  L.control.layers({
-    '📷 国土地理院 航空写真': gsiPhoto,
-    '🗺️ 国土地理院 標準地図': gsiStd,
-    '🛰️ ESRI衛星写真': satellite,
-    '📍 OpenStreetMap': street
-  }).addTo(map);
-
-  // Click handler for nara mode
-  map.on('click', function(e) {
-    if (!naraMode) return;
-    const pt = { id: uid(), lat: e.latlng.lat, lng: e.latlng.lng, note: '', date: new Date().toISOString().split('T')[0] };
-    const noteInput = prompt('ナラ枯れ疑い箇所のメモを入力してください（空白でもOK）:');
-    if (noteInput === null) return;
-    pt.note = noteInput;
-    db.naraKarePoints = db.naraKarePoints || [];
-    db.naraKarePoints.push(pt);
-    save();
-    addNaraMarker(pt);
-    renderNaraList();
-    renderDashboard();
-  });
-
-  renderMapMarkers();
-}
-
-function markerColor(s) {
-  if (s.naraKare) return '#ff6f00';
-  if (getMowAlert(s)) return '#f44336';
-  if (s.completionStatus === '完了') return '#9e9e9e';
-  if (s.completionStatus === '施工中') return '#2196f3';
-  return '#4caf50';
-}
-
-function makeIcon(color) {
-  return L.divIcon({
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
-    className: '',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8]
-  });
-}
-
-function renderMapMarkers() {
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
-
-  db.spaces.forEach(s => {
-    if (!s.lat || !s.lng) return;
-    const color = markerColor(s);
-    const m = L.marker([s.lat, s.lng], { icon: makeIcon(color) }).addTo(map);
-    m.bindPopup(`
-      <div class="popup-title">${s.naraKare?'🍂 ':''}${s.name}</div>
-      <div class="popup-row"><span class="popup-label">作業</span><span>${(s.workTypes||[]).join('・')||'-'}</span></div>
-      <div class="popup-row"><span class="popup-label">状況</span><span>${s.completionStatus||'-'}</span></div>
-      <div class="popup-row"><span class="popup-label">予定日</span><span>${dateStr(s.scheduledDate)}</span></div>
-      <div class="popup-row"><span class="popup-label">業者</span><span>${s.contractor||'-'}</span></div>
-      <div class="popup-row"><span class="popup-label">受注額</span><span>${yen(s.contractAmount)}</span></div>
-      ${s.statusNote ? `<div style="margin-top:6px;font-size:12px;color:#555;">${s.statusNote}</div>` : ''}
-      <div style="margin-top:8px;"><button onclick="editById('${s.id}')" style="font-size:12px;padding:3px 10px;background:var(--green);color:#fff;border:none;border-radius:4px;cursor:pointer;">編集</button></div>
-    `);
-    markers.push(m);
-  });
-
-  naraMarkers.forEach(m => map.removeLayer(m));
-  naraMarkers = [];
-  (db.naraKarePoints || []).forEach(pt => addNaraMarker(pt));
-  renderNaraList();
-}
-
-function addNaraMarker(pt) {
-  const icon = L.divIcon({
-    html: `<div style="font-size:20px;line-height:1;" title="ナラ枯れ疑い">🍂</div>`,
-    className: '',
-    iconSize: [24, 24],
-    iconAnchor: [12, 20]
-  });
-  const m = L.marker([pt.lat, pt.lng], { icon }).addTo(map);
-  m.bindPopup(`
-    <div class="popup-title">🍂 ナラ枯れ疑い箇所</div>
-    <div class="popup-row"><span class="popup-label">登録日</span><span>${dateStr(pt.date)}</span></div>
-    ${pt.note ? `<div style="margin-top:4px;font-size:12px;">${pt.note}</div>` : ''}
-    <div style="margin-top:8px;"><button onclick="deleteNara('${pt.id}')" style="font-size:12px;padding:3px 10px;background:#e53935;color:#fff;border:none;border-radius:4px;cursor:pointer;">削除</button></div>
-  `);
-  naraMarkers.push(m);
-}
-
-function deleteNara(id) {
-  db.naraKarePoints = (db.naraKarePoints||[]).filter(p => p.id !== id);
-  save();
-  renderMapMarkers();
-  renderDashboard();
-}
-
-function renderNaraList() {
-  const el = document.getElementById('nara-list');
-  const pts = db.naraKarePoints || [];
-  const spaces = db.spaces.filter(s => s.naraKare);
-  if (!pts.length && !spaces.length) {
-    el.innerHTML = '<div style="color:var(--gray);font-size:13px;padding:8px 0;">ナラ枯れ疑い箇所は登録されていません</div>';
-    return;
-  }
-  let html = '';
-  spaces.forEach(s => {
-    html += `<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;">
-      <strong>🍂 ${s.name}</strong>（緑地登録済み）
-      <span class="action-link" onclick="editById('${s.id}')">編集</span>
-    </div>`;
-  });
-  pts.forEach(pt => {
-    html += `<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
-      <span>📍 ${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)} （${dateStr(pt.date)}）${pt.note ? ' — '+pt.note : ''}</span>
-      <span class="action-link" onclick="deleteNara('${pt.id}')">削除</span>
-    </div>`;
-  });
-  el.innerHTML = html;
-}
-
-function toggleNaraMode() {
-  naraMode = !naraMode;
-  const btn = document.getElementById('nara-toggle-btn');
-  const notice = document.getElementById('nara-mode-notice');
-  const mapEl = document.getElementById('map');
-  btn.classList.toggle('active', naraMode);
-  notice.style.display = naraMode ? 'block' : 'none';
-  mapEl.classList.toggle('narakare-mode', naraMode);
-}
-
-// ============================
-// SETTINGS
-// ============================
-// ============================
-// GREEN SPACE NAME MASTER
-// ============================
-function getNames() {
-  return db.settings.greenSpaceNames || [];
-}
-
-function populateNameSelect() {
-  const sel = document.getElementById('f-name');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">-- 緑地名を選択 --</option>';
-  getNames().forEach(n => {
-    const opt = document.createElement('option');
-    opt.value = n;
-    opt.textContent = n;
-    sel.appendChild(opt);
-  });
-  if (current) sel.value = current;
-}
-
-function renderNameList() {
-  const el = document.getElementById('cfg-name-list');
-  if (!el) return;
-  const names = getNames();
-  if (!names.length) {
-    el.innerHTML = '<div style="padding:12px;color:var(--gray);font-size:13px;">登録なし</div>';
-    return;
-  }
-  el.innerHTML = names.map((n, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;">
-      <span>${n}</span>
-      <span class="action-link" onclick="removeGreenSpaceName(${i})">削除</span>
-    </div>`).join('');
-}
-
-function addGreenSpaceName() {
-  const input = document.getElementById('cfg-new-name');
-  const val = input.value.trim();
-  if (!val) return;
-  if (getNames().includes(val)) { alert('既に登録されています'); return; }
-  db.settings.greenSpaceNames = [...getNames(), val];
-  save();
-  input.value = '';
-  renderNameList();
-  populateNameSelect();
-}
-
-function removeGreenSpaceName(idx) {
-  const names = getNames();
-  if (!confirm(`「${names[idx]}」を削除しますか？`)) return;
-  names.splice(idx, 1);
-  db.settings.greenSpaceNames = names;
-  save();
-  renderNameList();
-  populateNameSelect();
-}
-
-function addNewGreenSpaceName() {
-  const val = prompt('新しい緑地名を入力してください：');
-  if (!val || !val.trim()) return;
-  const trimmed = val.trim();
-  if (!getNames().includes(trimmed)) {
-    db.settings.greenSpaceNames = [...getNames(), trimmed];
-    save();
-    renderNameList();
-  }
-  populateNameSelect();
-  document.getElementById('f-name').value = trimmed;
-}
-
-function loadSettings() {
-  document.getElementById('cfg-city').value = db.settings.city || '';
-  document.getElementById('cfg-budget').value = db.settings.totalBudget || '';
-  document.getElementById('cfg-lat').value = db.settings.lat || '';
-  document.getElementById('cfg-lng').value = db.settings.lng || '';
-  document.getElementById('cfg-interval').value = db.settings.mowIntervalDefault || 60;
-  document.getElementById('cfg-warn').value = db.settings.alertWarnDays || 14;
-  document.getElementById('cfg-apikey').value = db.settings.apiKey || '';
-  renderNameList();
-}
-
-function saveSettings() {
-  db.settings.city = document.getElementById('cfg-city').value;
-  db.settings.totalBudget = Number(document.getElementById('cfg-budget').value) || 0;
-  db.settings.lat = parseFloat(document.getElementById('cfg-lat').value) || 35.7;
-  db.settings.lng = parseFloat(document.getElementById('cfg-lng').value) || 139.7;
-  db.settings.mowIntervalDefault = Number(document.getElementById('cfg-interval').value) || 60;
-  db.settings.alertWarnDays = Number(document.getElementById('cfg-warn').value) || 14;
-  db.settings.apiKey = document.getElementById('cfg-apikey').value.trim();
-  save();
-  renderDashboard();
-  alert('設定を保存しました');
-}
-
-// ============================
-// NARA KARE AI JUDGE
-// ============================
-let naraJudgeSpaceId = null;
-let naraJudgeImageB64 = null;
-let naraJudgeMediaType = null;
-
-function openNaraJudge(id) {
-  naraJudgeSpaceId = id;
-  naraJudgeImageB64 = null;
-  naraJudgeMediaType = null;
-  const s = db.spaces.find(x => x.id === id);
-  document.getElementById('nara-judge-space-name').textContent = s ? s.name : '';
-  document.getElementById('nara-result').style.display = 'none';
-  document.getElementById('nara-preview-wrap').style.display = 'none';
-  document.getElementById('nara-judge-btn').disabled = true;
-  document.getElementById('nara-photo-input').value = '';
-  document.getElementById('nara-drop-zone').style.borderColor = '#ccc';
-  document.getElementById('nara-modal-overlay').classList.remove('hidden');
-}
-function closeNaraModal() { document.getElementById('nara-modal-overlay').classList.add('hidden'); }
-function closeNaraModalOutside(e) { if (e.target.id === 'nara-modal-overlay') closeNaraModal(); }
-
-function handleNaraDrop(e) {
-  e.preventDefault();
-  document.getElementById('nara-drop-zone').style.borderColor = '#ccc';
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) loadNaraImage(file);
-}
-function onNaraPhotoSelected(e) {
-  const file = e.target.files[0];
-  if (file) loadNaraImage(file);
-}
-function loadNaraImage(file) {
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const dataUrl = ev.target.result;
-    naraJudgeMediaType = file.type;
-    naraJudgeImageB64 = dataUrl.split(',')[1];
-    document.getElementById('nara-preview-img').src = dataUrl;
-    document.getElementById('nara-preview-wrap').style.display = 'block';
-    document.getElementById('nara-judge-btn').disabled = false;
-    document.getElementById('nara-result').style.display = 'none';
-    document.getElementById('nara-drop-zone').style.borderColor = '#e65100';
-  };
-  reader.readAsDataURL(file);
-}
-
-async function runNaraJudge() {
-  const apiKey = db.settings.apiKey || '';
-  if (!apiKey) {
-    alert('設定タブでAnthropic APIキーを入力・保存してください。');
-    return;
-  }
-  if (!naraJudgeImageB64) { alert('写真を選択してください。'); return; }
-
-  const btn = document.getElementById('nara-judge-btn');
-  const resultEl = document.getElementById('nara-result');
-  btn.disabled = true;
-  btn.textContent = '判定中...';
-  resultEl.style.display = 'none';
-
-  const prompt = `あなたは森林病害の専門家です。この写真を見て、ナラ枯れ（Raffaelea quercivora によるカシノナガキクイムシ媒介型萎凋病）の疑いがあるかどうか判定してください。
-
-判定基準：
-- 葉が夏～秋に急激に赤褐色・茶褐色に変色している
-- 幹の根元や中間部に白いフラス（木屑と糞の混合物）が付着している
-- 樹皮に直径2mm程度の円形穿孔痕（カシノナガキクイムシの穿入孔）がある
-- コナラ・ミズナラ・クヌギ・アベマキ・シラカシなどブナ科の樹木である
-
-以下の形式で日本語で回答してください：
-【判定】疑いあり または 問題なし
-【信頼度】高・中・低
-【根拠】（写真から判断できた根拠を2〜3文で）
-【推奨対応】（具体的な次のアクションを1〜2文で）`;
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: naraJudgeMediaType, data: naraJudgeImageB64 } },
-            { type: 'text', text: prompt }
-          ]
-        }]
-      })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    const text = data.content[0].text;
-
-    const isSuspect = text.includes('疑いあり');
-    const now = new Date().toISOString();
-
-    // 結果をDBに保存
-    const idx = db.spaces.findIndex(x => x.id === naraJudgeSpaceId);
-    if (idx >= 0) {
-      db.spaces[idx].naraKare = isSuspect;
-      db.spaces[idx].naraJudgedAt = now;
-      db.spaces[idx].naraJudgeNote = text;
-      save();
-      renderTable();
-      renderDashboard();
-      if (mapInit) renderMapMarkers();
-    }
-
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = `
-      <div style="border-radius:8px;padding:14px 16px;background:${isSuspect ? '#fff3e0' : '#e8f5e9'};border-left:4px solid ${isSuspect ? '#e65100' : '#2d7a3a'};">
-        <div style="font-weight:bold;font-size:15px;margin-bottom:8px;color:${isSuspect ? '#e65100' : '#2d7a3a'};">${isSuspect ? '🍂 ナラ枯れの疑いあり' : '✅ 現時点では問題なし'}</div>
-        <div style="font-size:13px;white-space:pre-wrap;color:#333;">${text.replace(/【/g,'<strong>【').replace(/】/g,'】</strong>')}</div>
-        <div style="font-size:11px;color:var(--gray);margin-top:8px;">判定日時: ${new Date(now).toLocaleString('ja-JP')}</div>
-      </div>`;
-
-  } catch(err) {
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = `<div style="background:var(--red-light);border-left:4px solid var(--red);border-radius:6px;padding:12px;font-size:13px;color:var(--red);">エラーが発生しました: ${err.message}</div>`;
-  }
-
-  btn.disabled = false;
-  btn.textContent = 'AIで判定する';
-}
-
-// ============================
-// NARA SCAN (一括スキャン)
-// ============================
-function renderNaraScanInit() {
-  const el = document.getElementById('narascan-result');
-  if (el.innerHTML === '') {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">🍂</div><div>「一括スキャン実行」ボタンを押すと、登録済み全緑地をAIが分析してリスク評価を行います。</div></div>`;
-  }
-}
-
-async function runNaraScan() {
-  const apiKey = db.settings.apiKey || '';
-  if (!apiKey) { alert('設定タブでAnthropic APIキーを入力・保存してください。'); return; }
-  if (!db.spaces.length) { alert('緑地データが登録されていません。'); return; }
-
-  const el = document.getElementById('narascan-result');
-  el.innerHTML = `<div class="card" style="text-align:center;padding:32px;"><div style="font-size:28px;margin-bottom:12px;">🔍</div><div style="font-size:14px;color:var(--gray);">全${db.spaces.length}件の緑地を分析中...</div><div style="margin-top:12px;height:4px;background:#eee;border-radius:2px;overflow:hidden;"><div style="height:100%;background:#e65100;border-radius:2px;animation:scan-prog 2s ease-in-out infinite alternate;width:60%;"></div></div></div>
-  <style>@keyframes scan-prog{from{width:10%}to{width:90%}}</style>`;
-
-  // 緑地データをテキスト化
-  const spacesSummary = db.spaces.map((s, i) => {
-    const parts = [
-      `【${i+1}】${s.name}`,
-      `作業種別: ${(s.workTypes||[]).join('・')||'未設定'}`,
-      s.area ? `草刈り面積: ${s.area}㎡` : null,
-      s.pruningCount ? `剪定: ${s.pruningCount}本` : null,
-      s.fellingCount ? `伐採: ${s.fellingCount}本` : null,
-      s.naraJudgedAt ? `既存判定: ${s.naraKare ? '疑いあり' : '問題なし'}（${s.naraJudgedAt.split('T')[0]}）` : null,
-      s.statusNote ? `現状メモ: ${s.statusNote}` : null,
-    ].filter(Boolean);
-    return parts.join(' / ');
-  }).join('\n');
-
-  const prompt = `あなたは日本の森林病害・ナラ枯れ（Raffaelea quercivoraによるカシノナガキクイムシ媒介型萎凋病）の専門家です。
-
-以下は新座市内の緑地管理データです。各緑地のメモ・作業種別・樹木情報を総合的に分析し、ナラ枯れのリスクが高い箇所を洗い出してください。
-
-## 緑地データ
-${spacesSummary}
-
-## 分析してほしいこと
-1. 各緑地のナラ枯れリスクを「高・中・低・不明」で評価
-2. リスクが「高」「中」の箇所は理由と推奨対応も記載
-3. 新座市周辺の地域特性（武蔵野台地・雑木林が多い・コナラ等ブナ科多い）も考慮
-4. 総評として優先的に現地確認すべき順番を提示
-
-## 出力フォーマット（必ずこの形式で）
-各緑地を以下の形式で列挙してください：
----
-[番号] 緑地名
-リスク: 高／中／低／不明
-理由: （簡潔に）
-推奨対応: （リスク高・中のみ記載）
----
-最後に【総評】として全体のまとめと優先確認順を記載してください。`;
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    const text = data.content[0].text;
-    const scannedAt = new Date().toLocaleString('ja-JP');
-
-    // パースして表示
-    const blocks = text.split('---').map(b => b.trim()).filter(Boolean);
-    let html = `<div style="font-size:12px;color:var(--gray);margin-bottom:12px;text-align:right;">スキャン実行: ${scannedAt}　対象: ${db.spaces.length}件</div>`;
-
-    // 総評を分離
-    const soukouIdx = blocks.findIndex(b => b.startsWith('【総評】'));
-    const spaceBlocks = soukouIdx >= 0 ? blocks.slice(0, soukouIdx) : blocks.filter(b => !b.startsWith('【総評】'));
-    const soukouBlock = soukouIdx >= 0 ? blocks[soukouIdx] : blocks.find(b => b.startsWith('【総評】')) || '';
-
-    // 各緑地カード
-    html += spaceBlocks.map(block => {
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-      if (!lines.length) return '';
-      const titleLine = lines[0];
-      const riskLine = lines.find(l => l.startsWith('リスク:')) || '';
-      const risk = riskLine.replace('リスク:', '').trim();
-      const reasonLine = lines.find(l => l.startsWith('理由:')) || '';
-      const actionLine = lines.find(l => l.startsWith('推奨対応:')) || '';
-
-      const riskColor = risk === '高' ? '#c62828' : risk === '中' ? '#e65100' : risk === '低' ? '#2d7a3a' : '#546e7a';
-      const riskBg = risk === '高' ? '#ffebee' : risk === '中' ? '#fff3e0' : risk === '低' ? '#e8f5e9' : '#f5f5f5';
-      const riskBadge = `<span style="display:inline-block;padding:2px 10px;border-radius:12px;background:${riskColor};color:#fff;font-size:12px;font-weight:bold;margin-left:8px;">${risk||'不明'}</span>`;
-
-      // 対象緑地を探してフラグ更新ボタン
-      const matchedSpace = db.spaces.find(s => titleLine.includes(s.name));
-      const flagBtn = matchedSpace && risk === '高'
-        ? `<button onclick="flagNaraFromScan('${matchedSpace.id}')" style="font-size:11px;padding:3px 10px;background:#e65100;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:8px;">⚠️ 疑いフラグ登録</button>`
-        : '';
-
-      return `<div class="card" style="border-left:4px solid ${riskColor};background:${riskBg};margin-bottom:10px;">
-        <div style="font-weight:bold;font-size:14px;margin-bottom:6px;">${titleLine}${riskBadge}${flagBtn}</div>
-        ${reasonLine ? `<div style="font-size:13px;color:#444;margin-bottom:4px;">${reasonLine}</div>` : ''}
-        ${actionLine ? `<div style="font-size:13px;color:${riskColor};font-weight:bold;">${actionLine}</div>` : ''}
-      </div>`;
-    }).join('');
-
-    // 総評
-    if (soukouBlock) {
-      html += `<div class="card" style="border-left:4px solid #1565c0;background:#e3f2fd;margin-top:8px;">
-        <div style="font-weight:bold;color:#1565c0;margin-bottom:8px;font-size:14px;">📋 総評・優先確認順</div>
-        <div style="font-size:13px;white-space:pre-wrap;color:#333;">${soukouBlock.replace('【総評】','').trim()}</div>
-      </div>`;
-    }
-
-    el.innerHTML = html;
-
-  } catch(err) {
-    el.innerHTML = `<div style="background:var(--red-light);border-left:4px solid var(--red);border-radius:6px;padding:14px;font-size:13px;color:var(--red);">エラーが発生しました: ${err.message}</div>`;
-  }
-}
-
-function flagNaraFromScan(id) {
-  const s = db.spaces.find(x => x.id === id);
-  if (!s) return;
-  if (!confirm(`「${s.name}」にナラ枯れ疑いフラグを登録しますか？`)) return;
-  s.naraKare = true;
-  s.naraJudgedAt = new Date().toISOString();
-  s.naraJudgeNote = 'ナラ枯れ一括スキャンによりリスク「高」と判定';
-  save();
-  renderTable();
-  renderDashboard();
-  if (mapInit) renderMapMarkers();
-  // ボタンを更新
-  event.target.textContent = '✅ 登録済み';
-  event.target.disabled = true;
-}
-
-function clearAllData() {
-  if (!confirm('全データを削除します。元に戻せません。よろしいですか？')) return;
-  db = { settings: db.settings, spaces: [], naraKarePoints: [] };
-  save();
-  renderTable();
-  renderDashboard();
-  alert('データを削除しました');
-}
-
-// ============================
-// EXPORT / IMPORT
-// ============================
-function exportJSON() {
-  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ryokuchi-${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-}
-
-function importJSON(e) {
+  renderBudgetList(gs);
+  document.getElementById('budgetYear').value = '';
+  document.getElementById('budgetAmount').value = '';
+});
+
+// ---- Records ----
+document.getElementById('recPhoto').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.spaces) throw new Error('無効なファイル');
-      if (!confirm(`${data.spaces.length}件の緑地データを読み込みます。現在のデータは上書きされます。`)) return;
-      db = data;
-      save();
-      renderTable();
-      renderDashboard();
-      loadSettings();
-      if (mapInit) { map.setView([db.settings.lat||35.7, db.settings.lng||139.7], 14); renderMapMarkers(); }
-      alert('読み込みが完了しました');
-    } catch(err) { alert('ファイルの読み込みに失敗しました: ' + err.message); }
+  reader.onload = () => {
+    const img = document.getElementById('recPhotoPreview');
+    img.src = reader.result;
+    img.style.display = 'block';
   };
-  reader.readAsText(file);
-  e.target.value = '';
+  reader.readAsDataURL(file);
+});
+
+function resetRecordForm() {
+  editingRecordId = null;
+  document.getElementById('editingBanner').style.display = 'none';
+  document.getElementById('btnAddRecord').textContent = '記録を追加';
+  document.getElementById('btnCancelEdit').style.display = 'none';
+  document.getElementById('recYear').value = '';
+  document.getElementById('recDate').value = '';
+  document.getElementById('recContractor').value = '';
+  document.getElementById('recCost').value = '';
+  document.getElementById('recInputBy').value = '';
+  document.getElementById('recOrderManager').value = '';
+  document.getElementById('recPhoto').value = '';
+  document.getElementById('recPhotoPreview').style.display = 'none';
+  document.getElementById('recPhotoPreview').src = '';
+  renderRecTypeSelect();
+  renderRecStatusSelect();
 }
 
-// ============================
-// SAMPLE DATA
-// ============================
-function loadSampleData() {
-  if (!confirm('サンプルデータを読み込みます。現在のデータは上書きされます。')) return;
-  const today = new Date();
-  const dt = (d) => { const x = new Date(today); x.setDate(x.getDate()+d); return x.toISOString().split('T')[0]; };
-  db.settings = { city: '新座市', totalBudget: 8000000, lat: 35.7937, lng: 139.5237, mowIntervalDefault: 60, alertWarnDays: 14 };
-  db.spaces = [
-    { id: uid(), name: '野火止用水 緑道（新座駅北側）', workTypes: ['草刈り','剪定'], scheduledDate: dt(12), area: 4200, pruningCount: 38, fellingCount: null, completionStatus: '未着手', completionDate: null, hasEstimate: true, estimateAmount: 650000, estimateDetails: '草刈り一式（延長約1.4km）・高木剪定38本', contractor: '新座緑化㈱', contractAmount: 620000, contractType: '単価契約', mowInterval: 60, lastMowDate: dt(-55), statusNote: '雑草が通路脇で繁茂。一部路面に張り出しあり。', lat: 35.7968, lng: 139.5240, naraKare: false, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '黒目川 右岸緑地（栄四丁目付近）', workTypes: ['草刈り','除草'], scheduledDate: dt(20), area: 3100, pruningCount: null, fellingCount: null, completionStatus: '施工中', completionDate: null, hasEstimate: true, estimateAmount: 480000, estimateDetails: '草刈り・除草剤散布一式', contractor: '武州建設㈱', contractAmount: 455000, contractType: '随意契約', mowInterval: 60, lastMowDate: dt(-28), statusNote: '河川沿い法面の草刈り実施中。安全確保のため通行制限中。', lat: 35.7880, lng: 139.5310, naraKare: false, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '平林寺隣接市有林（野火止）', workTypes: ['伐採','剪定'], scheduledDate: dt(-3), area: null, pruningCount: 45, fellingCount: 12, completionStatus: '未着手', completionDate: null, hasEstimate: false, estimateAmount: null, estimateDetails: '', contractor: '', contractAmount: null, contractType: '', mowInterval: 180, lastMowDate: dt(-200), statusNote: 'コナラ・ミズナラ数本に変色・穿孔痕を確認。ナラ枯れ疑い。現地調査を要請中。', lat: 35.8012, lng: 139.5158, naraKare: true, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '新座市民総合体育館 周辺緑地', workTypes: ['草刈り','剪定'], scheduledDate: dt(-25), area: 1800, pruningCount: 22, fellingCount: null, completionStatus: '完了', completionDate: dt(-22), hasEstimate: true, estimateAmount: 320000, estimateDetails: '草刈り一式・低木刈り込み・高木剪定22本', contractor: '新座緑化㈱', contractAmount: 305000, contractType: '単価契約', mowInterval: 60, lastMowDate: dt(-22), statusNote: '施工完了。刈り取り・整形済み。次回は8月下旬予定。', lat: 35.7855, lng: 139.5195, naraKare: false, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '道場四丁目 調整池周辺緑地', workTypes: ['草刈り'], scheduledDate: dt(8), area: 950, pruningCount: null, fellingCount: null, completionStatus: '未着手', completionDate: null, hasEstimate: true, estimateAmount: 145000, estimateDetails: '草刈り一式（機械刈り）', contractor: '', contractAmount: null, contractType: '随意契約', mowInterval: 60, lastMowDate: dt(-48), statusNote: '梅雨後急激に繁茂。早期対応が必要。', lat: 35.8070, lng: 139.5330, naraKare: false, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '新座駅南口 ロータリー植栽帯', workTypes: ['剪定','除草'], scheduledDate: dt(5), area: null, pruningCount: 18, fellingCount: null, completionStatus: '未着手', completionDate: null, hasEstimate: true, estimateAmount: 110000, estimateDetails: '低木剪定・刈り込み・除草一式', contractor: '', contractAmount: null, contractType: '随意契約', mowInterval: 180, lastMowDate: dt(-70), statusNote: '通行の妨げになる枝が伸びている。優先度高。', lat: 35.7920, lng: 139.5215, naraKare: false, updatedAt: new Date().toISOString() },
-    { id: uid(), name: '片山公園 里山ゾーン', workTypes: ['草刈り','伐採'], scheduledDate: dt(30), area: 5200, pruningCount: null, fellingCount: 3, completionStatus: '未着手', completionDate: null, hasEstimate: false, estimateAmount: null, estimateDetails: '', contractor: '', contractAmount: null, contractType: '', mowInterval: 90, lastMowDate: dt(-85), statusNote: '枯損木3本確認。見積依頼中。', lat: 35.7775, lng: 139.5270, naraKare: false, updatedAt: new Date().toISOString() }
-  ];
-  db.naraKarePoints = [
-    { id: uid(), lat: 35.8025, lng: 139.5145, note: '大型コナラ4本に変色・フラスあり。平林寺隣接林内。', date: dt(-10) },
-    { id: uid(), lat: 35.8005, lng: 139.5170, note: 'ミズナラ2本・葉の褐変を確認。要現地精査。', date: dt(-5) }
-  ];
+document.getElementById('btnCancelEdit').addEventListener('click', resetRecordForm);
+
+document.getElementById('btnAddRecord').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const year = document.getElementById('recYear').value;
+  const date = document.getElementById('recDate').value;
+  const type = document.getElementById('recType').value;
+  const status = document.getElementById('recStatus').value;
+  const inputBy = document.getElementById('recInputBy').value.trim();
+  const orderManager = document.getElementById('recOrderManager').value.trim();
+  const contractor = document.getElementById('recContractor').value.trim();
+  const cost = document.getElementById('recCost').value;
+  const photoImg = document.getElementById('recPhotoPreview');
+  const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
+
+  if (!year || !date || !type) {
+    alert('年度・実施日・作業種別は必須です');
+    return;
+  }
+
+  if (editingRecordId) {
+    const r = gs.records.find(x => x.id === editingRecordId);
+    if (r) {
+      r.year = year; r.date = date; r.type = type; r.status = status;
+      r.inputBy = inputBy; r.orderManager = orderManager;
+      r.contractor = contractor; r.cost = Number(cost || 0);
+      if (photo) r.photo = photo;
+    }
+  } else {
+    gs.records.push({
+      id: uid(), year, date, type, status,
+      inputBy, orderManager, contractor,
+      cost: Number(cost || 0), photo
+    });
+  }
   save();
-  renderTable();
-  renderDashboard();
-  loadSettings();
-  if (mapInit) { map.setView([35.780, 139.740], 14); renderMapMarkers(); }
-  alert('サンプルデータを読み込みました！');
+  resetRecordForm();
+  renderBudgetList(gs);
+  renderRecordTable(gs);
+  renderGreenList();
+});
+
+function editRecord(gs, recId) {
+  const r = gs.records.find(x => x.id === recId);
+  if (!r) return;
+  editingRecordId = recId;
+  document.getElementById('editingBanner').style.display = 'block';
+  document.getElementById('btnAddRecord').textContent = '記録を更新';
+  document.getElementById('btnCancelEdit').style.display = 'inline-block';
+  document.getElementById('recYear').value = r.year;
+  document.getElementById('recDate').value = r.date;
+  renderRecTypeSelect(); document.getElementById('recType').value = r.type;
+  renderRecStatusSelect(); document.getElementById('recStatus').value = r.status || statuses[0];
+  document.getElementById('recInputBy').value = r.inputBy || '';
+  document.getElementById('recOrderManager').value = r.orderManager || '';
+  document.getElementById('recContractor').value = r.contractor || '';
+  document.getElementById('recCost').value = r.cost;
+  const img = document.getElementById('recPhotoPreview');
+  if (r.photo) { img.src = r.photo; img.style.display = 'block'; }
+  else { img.style.display = 'none'; img.src = ''; }
+  document.getElementById('recYear').scrollIntoView({behavior:'smooth', block:'center'});
 }
 
-// ============================
-// INIT
-// ============================
-load();
-renderDashboard();
-renderTable();
-loadSettings();
-renderNameList();
+function renderRecordTable(gs) {
+  const wrap = document.getElementById('recordTableWrap');
+  if (gs.records.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">記録がありません</div>';
+    return;
+  }
+  const sorted = gs.records.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
+  let html = `<table><tr>
+    <th>年度</th><th>日付</th><th>種別</th><th>進捗</th><th>業者</th>
+    <th>入力者</th><th>発注担当</th><th>費用</th><th>写真</th><th></th>
+  </tr>`;
+  sorted.forEach(r => {
+    html += `<tr>
+      <td>${escapeHtml(r.year)}</td>
+      <td>${escapeHtml(r.date)}</td>
+      <td>${escapeHtml(r.type)}</td>
+      <td>
+        <select class="status-select" data-id="${r.id}">
+          ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s===r.status?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </td>
+      <td>${escapeHtml(r.contractor || '-')}</td>
+      <td>${escapeHtml(r.inputBy || '-')}</td>
+      <td>${escapeHtml(r.orderManager || '-')}</td>
+      <td>¥${Number(r.cost).toLocaleString()}</td>
+      <td>${r.photo ? `<img class="photo-thumb" src="${r.photo}" data-id="${r.id}">` : '-'}</td>
+      <td>
+        <button class="outline" data-edit="${r.id}">編集</button>
+        <button class="danger" data-del="${r.id}">削除</button>
+      </td>
+    </tr>`;
+  });
+  html += `</table>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('img[data-id]').forEach(img => {
+    img.addEventListener('click', () => {
+      document.getElementById('photoModalImg').src = img.src;
+      document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
+  wrap.querySelectorAll('select.status-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const r = gs.records.find(x => x.id === sel.dataset.id);
+      if (r) { r.status = sel.value; save(); renderGreenList(); }
+    });
+  });
+  wrap.querySelectorAll('button[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => editRecord(gs, btn.dataset.edit));
+  });
+  wrap.querySelectorAll('button[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この記録を削除しますか？')) return;
+      gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
+      save();
+      renderBudgetList(gs); renderRecordTable(gs); renderGreenList();
+    });
+  });
+}
+
+document.getElementById('photoModal').addEventListener('click', () => {
+  document.getElementById('photoModal').style.display = 'none';
+});
+
+// ---- PDF site-plan plotting ----
+document.getElementById('pdfUpload').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const gs = getGreen(currentId);
+  if (!file || !gs) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    gs.pdf = reader.result;
+    gs.pdfName = file.name;
+    if (!gs.pdfPins) gs.pdfPins = [];
+    save();
+    renderPdfSection(gs);
+    renderGreenList();
+  };
+  reader.readAsDataURL(file);
+});
+
+function renderPdfSection(gs) {
+  const fileNameEl = document.getElementById('pdfFileName');
+  const holder = document.getElementById('pdfCanvasHolder');
+  const controls = document.getElementById('pdfControls');
+  pinAddMode = false;
+  document.getElementById('btnPinAddMode').textContent = '📍 クリックでピンを追加';
+
+  if (!gs.pdf) {
+    fileNameEl.textContent = '';
+    holder.style.display = 'none';
+    controls.style.display = 'none';
+    return;
+  }
+  fileNameEl.textContent = '読み込み中... (' + (gs.pdfName || 'PDF') + ')';
+  holder.style.display = 'inline-block';
+  controls.style.display = 'block';
+
+  const base64 = gs.pdf.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  let settled = false;
+  const slowTimer = setTimeout(() => {
+    if (!settled) {
+      fileNameEl.textContent = '読み込みに時間がかかっています…（ブラウザのタブがアクティブか確認するか、再読み込みしてみてください）';
+    }
+  }, 8000);
+
+  pdfjsLib.getDocument({ data: bytes }).promise.then(pdf => pdf.getPage(1)).then(page => {
+    const viewport = page.getViewport({ scale: 1.3 });
+    const canvas = document.getElementById('pdfCanvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    return page.render({ canvasContext: ctx, viewport }).promise;
+  }).then(() => {
+    settled = true;
+    clearTimeout(slowTimer);
+    fileNameEl.textContent = '読込済み: ' + (gs.pdfName || 'PDF');
+    renderPdfPins(gs);
+  }).catch(err => {
+    settled = true;
+    clearTimeout(slowTimer);
+    fileNameEl.textContent = 'PDFの読み込みに失敗しました: ' + err.message;
+  });
+}
+
+function renderPdfPins(gs) {
+  const layer = document.getElementById('pdfPinLayer');
+  layer.innerHTML = '';
+  (gs.pdfPins || []).forEach(p => {
+    const pin = document.createElement('div');
+    pin.className = 'pdf-pin';
+    pin.style.left = p.x + '%';
+    pin.style.top = p.y + '%';
+    pin.title = p.label;
+    layer.appendChild(pin);
+
+    const label = document.createElement('div');
+    label.className = 'pdf-pin-label';
+    label.style.left = p.x + '%';
+    label.style.top = p.y + '%';
+    label.textContent = p.label;
+    layer.appendChild(label);
+  });
+  renderPinList(gs);
+}
+
+function renderPinList(gs) {
+  const wrap = document.getElementById('pinList');
+  if (!gs.pdfPins || gs.pdfPins.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">ピンはまだありません</div>';
+    return;
+  }
+  wrap.innerHTML = gs.pdfPins.map(p =>
+    `<div class="pin-item"><span>📍 ${escapeHtml(p.label)}</span><button class="danger" data-pin="${p.id}">削除</button></div>`
+  ).join('');
+  wrap.querySelectorAll('button[data-pin]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      gs.pdfPins = gs.pdfPins.filter(p => p.id !== btn.dataset.pin);
+      save();
+      renderPdfPins(gs);
+    });
+  });
+}
+
+document.getElementById('btnPinAddMode').addEventListener('click', () => {
+  pinAddMode = !pinAddMode;
+  document.getElementById('btnPinAddMode').textContent = pinAddMode
+    ? '🖱️ PDF上をクリックしてピンを配置...（再クリックでキャンセル）'
+    : '📍 クリックでピンを追加';
+});
+
+document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
+  if (!pinAddMode) return;
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const canvas = document.getElementById('pdfCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return;
+  const label = prompt('ピンの名称・説明を入力してください', '作業ポイント');
+  if (!label) return;
+  if (!gs.pdfPins) gs.pdfPins = [];
+  gs.pdfPins.push({ id: uid(), label, x, y });
+  save();
+  renderPdfPins(gs);
+  pinAddMode = false;
+  document.getElementById('btnPinAddMode').textContent = '📍 クリックでピンを追加';
+});
+
+function renderAll() {
+  renderMarkers();
+  renderGreenList();
+  renderTypeTags();
+  renderRecTypeSelect();
+  renderStatusTags();
+  renderRecStatusSelect();
+}
+
+renderAll();
 </script>
 </body>
 </html>
