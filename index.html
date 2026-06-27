@@ -452,7 +452,7 @@
     <button class="outline" id="btnAddTreeModePrune" style="width:100%;">✂️ 地図クリックで剪定予定の木を追加</button>
   </div>
   <div id="treeMarkerList" style="margin-top:8px;"></div>
-  <small class="help">地図上のマーカーをクリックすると、緑地の場所と同じ地図に🪓（伐採）/✂️（剪定）マークで表示されます。対応が済んだらチェックを入れてください。</small>
+  <small class="help">地図上のマーカーをクリックすると、緑地の場所と同じ地図に🪓（伐採）/✂️（剪定）マークで表示されます。対応が済んだらチェックを入れてください。チェック済みの本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -759,6 +759,7 @@ function renderTreeMarkerList(gs) {
       <label>
         <input type="checkbox" data-done="${t.id}" ${t.done ? 'checked' : ''}>
         ${t.type === '剪定' ? '✂️' : '🪓'} ${escapeHtml(t.label)}
+        ${t.consumedBy ? '<span class="env-tax-badge" style="margin-left:4px;">記録済み</span>' : ''}
       </label>
       <button class="danger" data-del-tree="${t.id}">削除</button>
     </div>
@@ -836,18 +837,36 @@ function renderRecTypeSelect() {
   renderItemQtyFields(sel.value);
 }
 
+// ---- Linking map-plotted trees to work record quantities ----
+// A tree marker counts as "available" once marked 対応済み(done) and not yet claimed by a record.
+function countAvailableTreeMarkers(gs, type) {
+  return (gs.treeMarkers || []).filter(t => t.type === type && t.done && !t.consumedBy).length;
+}
+function consumeTreeMarkers(gs, type, count, recordId) {
+  const avail = (gs.treeMarkers || []).filter(t => t.type === type && t.done && !t.consumedBy);
+  avail.slice(0, count).forEach(t => { t.consumedBy = recordId; });
+}
+function releaseTreeMarkers(gs, recordId) {
+  (gs.treeMarkers || []).forEach(t => { if (t.consumedBy === recordId) t.consumedBy = null; });
+}
+
 // Each work type has a natural unit: 草刈り/清掃→㎡、剪定→強剪定/弱剪定+本数、伐採→本。
 // Custom/other types fall back to a free quantity + unit field.
 function renderItemQtyFields(typeVal) {
   const wrap = document.getElementById('itemQtyWrap');
+  const gs = getGreen(currentId);
   if (typeVal === '草刈り' || typeVal === '清掃') {
     wrap.innerHTML = `<label>面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
-  } else if (typeVal === '剪定') {
-    wrap.innerHTML = `<label>剪定の種類・本数</label>
-      <select id="itemSubType"><option value="強剪定">強剪定</option><option value="弱剪定">弱剪定</option></select>
-      <input type="number" id="itemQty" placeholder="本数（本）" style="margin-top:4px;">`;
-  } else if (typeVal === '伐採') {
-    wrap.innerHTML = `<label>本数（本）</label><input type="number" id="itemQty" placeholder="例: 5">`;
+  } else if (typeVal === '剪定' || typeVal === '伐採') {
+    const available = gs ? countAvailableTreeMarkers(gs, typeVal) : 0;
+    const icon = typeVal === '剪定' ? '✂️' : '🪓';
+    const subTypeHtml = typeVal === '剪定'
+      ? `<select id="itemSubType"><option value="強剪定">強剪定</option><option value="弱剪定">弱剪定</option></select>`
+      : '';
+    wrap.innerHTML = `<label>本数（本）</label>
+      ${subTypeHtml}
+      <input type="number" id="itemQty" placeholder="例: 5" value="${available || ''}" style="margin-top:4px;">
+      ${available > 0 ? `<small class="help">${icon} 地図で対応済みにした木: ${available}本（自動入力・編集可）</small>` : ''}`;
   } else {
     wrap.innerHTML = `<label>数量・単位</label>
       <input type="number" id="itemQty" placeholder="数量" style="margin-bottom:4px;">
@@ -1118,6 +1137,9 @@ function openDetail(id) {
   currentId = id;
   const gs = getGreen(id);
   if (!gs) return;
+  if (gs.lat != null && gs.lng != null) {
+    map.setView([gs.lat, gs.lng], Math.max(map.getZoom(), 17), { animate: false });
+  }
   resetRecordForm();
   document.getElementById('detail').style.display = 'block';
   document.getElementById('detailName').textContent = gs.name;
@@ -1323,7 +1345,24 @@ function resetRecordForm() {
   renderBudgetCategorySelectInto('recBudgetCategory', gs ? gs.displayBudgetCategory : null);
 }
 
-document.getElementById('btnCancelEdit').addEventListener('click', resetRecordForm);
+document.getElementById('btnCancelEdit').addEventListener('click', () => {
+  // Cancelling an edit restores the tree-marker claims this record originally had.
+  if (editingRecordId) {
+    const gs = getGreen(currentId);
+    const r = gs && gs.records.find(x => x.id === editingRecordId);
+    if (gs && r) {
+      (r.items || []).forEach(item => {
+        if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
+          consumeTreeMarkers(gs, item.type, item.qty, r.id);
+        }
+      });
+      save();
+      renderTreeMarkerList(gs);
+      renderTreeMarkers();
+    }
+  }
+  resetRecordForm();
+});
 
 document.getElementById('btnAddRecord').addEventListener('click', () => {
   const gs = getGreen(currentId);
@@ -1343,6 +1382,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   }
   const cost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
 
+  let recordId;
   if (editingRecordId) {
     const r = gs.records.find(x => x.id === editingRecordId);
     if (r) {
@@ -1351,12 +1391,22 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
       r.contractor = contractor; r.envTax = envTax; r.budgetCategory = budgetCategory;
       r.items = currentItems.slice(); r.cost = cost;
       if (photo) r.photo = photo;
+      recordId = r.id;
     }
   } else {
+    recordId = uid();
     gs.records.push({
-      id: uid(), year: gs.selectedYear, date, status,
+      id: recordId, year: gs.selectedYear, date, status,
       inputBy, contractor, envTax, budgetCategory,
       items: currentItems.slice(), cost, photo
+    });
+  }
+  // Claim the map-plotted trees this record's items draw on (editing already released its old claims above).
+  if (recordId) {
+    currentItems.forEach(item => {
+      if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
+        consumeTreeMarkers(gs, item.type, item.qty, recordId);
+      }
     });
   }
   save();
@@ -1365,15 +1415,21 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   renderRecordTable(gs);
   renderGreenList();
   renderEnvTaxBox();
+  renderTreeMarkerList(gs);
+  renderTreeMarkers();
 });
 
 function editRecord(gs, recId) {
   const r = gs.records.find(x => x.id === recId);
   if (!r) return;
+  // Temporarily free this record's tree-marker claims while editing (cancel restores them; save re-claims).
+  releaseTreeMarkers(gs, recId);
   editingRecordId = recId;
   if (!gs.years.includes(r.year)) { gs.years.push(r.year); }
   gs.selectedYear = r.year;
   save();
+  renderTreeMarkerList(gs);
+  renderTreeMarkers();
   renderYearSelect(gs);
   document.getElementById('editingBanner').style.display = 'block';
   document.getElementById('btnAddRecord').textContent = '記録を更新';
@@ -1459,9 +1515,11 @@ function renderRecordTable(gs) {
   wrap.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!confirm('この記録を削除しますか？')) return;
+      releaseTreeMarkers(gs, btn.dataset.del);
       gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
       save();
       renderBudgetCard(gs); renderRecordTable(gs); renderGreenList(); renderEnvTaxBox();
+      renderTreeMarkerList(gs); renderTreeMarkers();
     });
   });
 }
