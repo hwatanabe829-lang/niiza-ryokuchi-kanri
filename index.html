@@ -251,6 +251,26 @@
     background: #c8e6c9;
     color: #1b5e20;
   }
+  .date-group-header {
+    background: #cfe8d1 !important;
+    font-weight: bold;
+    font-size: 12.5px;
+    color: #1b5e20;
+    padding: 6px 8px !important;
+  }
+  tr.row-complete td {
+    background: #f1f8e9;
+  }
+  .complete-badge {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    background: #2e7d32;
+    color: white;
+  }
   .item-total {
     text-align: right;
     font-size: 12px;
@@ -469,11 +489,11 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>📄 敷地図（PDF）にプロット</h3>
+  <h3>📄 敷地図にプロット</h3>
   <div class="pdf-wrap">
     <div class="field">
-      <label>この緑地のPDF敷地図をアップロード</label>
-      <input type="file" id="pdfUpload" accept="application/pdf">
+      <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
+      <input type="file" id="pdfUpload" accept="application/pdf,image/*">
       <small class="help" id="pdfFileName"></small>
     </div>
     <div id="pdfCanvasHolder" style="display:none;">
@@ -574,13 +594,19 @@ const PEOPLE_KEY = 'niiza_green_people_v1';
 const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
 const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
 const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
-const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了'];
+const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了', '施工書類受け取り済み', '請求書処理済み'];
+const FINAL_STATUS = '請求書処理済み'; // 完了の定義＝請求書処理まで完了したこと
 const DEFAULT_BUDCATS = ['通常予算'];
 const NIIZA_CENTER = [35.7768, 139.5589];
 
 let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let types = JSON.parse(localStorage.getItem(TYPES_KEY) || 'null') || DEFAULT_TYPES.slice();
 let statuses = JSON.parse(localStorage.getItem(STATUS_KEY) || 'null') || DEFAULT_STATUSES.slice();
+// 既存インストールにも新しい進捗段階を補完する（カスタム編集済みの一覧は壊さない）
+['施工書類受け取り済み', '請求書処理済み'].forEach(s => {
+  if (!statuses.includes(s)) statuses.push(s);
+});
+localStorage.setItem(STATUS_KEY, JSON.stringify(statuses));
 let budgetCategories = JSON.parse(localStorage.getItem(BUDCAT_KEY) || 'null') || DEFAULT_BUDCATS.slice();
 // 環境譲与税予算は別会計で専用管理するため、通常の「予算の種類」一覧からは除外する
 if (budgetCategories.includes('環境譲与税予算')) {
@@ -1460,39 +1486,52 @@ function renderRecordTable(gs) {
     return;
   }
   const sorted = filtered.slice().sort((a, b) => (b.year - a.year) || (b.date || '').localeCompare(a.date || ''));
+
+  // Group consecutive records by 年度+日付 so it's clear at a glance what was requested on which day.
+  const groups = [];
+  sorted.forEach(r => {
+    const key = r.year + '_' + r.date;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.records.push(r);
+    else groups.push({ key, year: r.year, date: r.date, records: [r] });
+  });
+
   let html = `<table><tr>
-    <th>年度</th><th>日付</th><th>作業内容</th><th>予算</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
+    <th>作業内容</th><th>予算</th><th>環境譲与税</th><th>進捗</th><th>業者</th>
     <th>入力者</th><th>費用</th><th>写真</th><th></th>
   </tr>`;
-  sorted.forEach(r => {
-    const items = r.items || [];
-    const itemsLabel = items.length
-      ? items.map(it => {
-          const t = it.subType ? `${it.type}(${it.subType})` : it.type;
-          const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
-          return escapeHtml(t + (q ? ' ' + q : ''));
-        }).join('、')
-      : escapeHtml(r.type || '-');
-    html += `<tr>
-      <td>${escapeHtml(r.year)}</td>
-      <td>${escapeHtml(r.date)}</td>
-      <td>${itemsLabel}</td>
-      <td>${escapeHtml(r.budgetCategory || '-')}</td>
-      <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
-      <td>
-        <select class="status-select" data-id="${r.id}">
-          ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s===r.status?'selected':''}>${escapeHtml(s)}</option>`).join('')}
-        </select>
-      </td>
-      <td>${escapeHtml(r.contractor || '-')}</td>
-      <td>${escapeHtml(r.inputBy || '-')}</td>
-      <td>¥${Number(r.cost).toLocaleString()}</td>
-      <td>${r.photo ? `<img class="photo-thumb" src="${r.photo}" data-id="${r.id}">` : '-'}</td>
-      <td>
-        <button class="outline" data-edit="${r.id}">編集</button>
-        <button class="danger" data-del="${r.id}">削除</button>
-      </td>
-    </tr>`;
+  groups.forEach(g => {
+    html += `<tr><td colspan="9" class="date-group-header">📅 ${escapeHtml(g.year)}年度 ${escapeHtml(g.date)}</td></tr>`;
+    g.records.forEach(r => {
+      const items = r.items || [];
+      const itemsLabel = items.length
+        ? items.map(it => {
+            const t = it.subType ? `${it.type}(${it.subType})` : it.type;
+            const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
+            return escapeHtml(t + (q ? ' ' + q : ''));
+          }).join('、')
+        : escapeHtml(r.type || '-');
+      const isComplete = r.status === FINAL_STATUS;
+      html += `<tr class="${isComplete ? 'row-complete' : ''}">
+        <td>${itemsLabel}</td>
+        <td>${escapeHtml(r.budgetCategory || '-')}</td>
+        <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
+        <td>
+          <select class="status-select" data-id="${r.id}">
+            ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s===r.status?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+          </select>
+          ${isComplete ? '<span class="complete-badge">✅完了</span>' : ''}
+        </td>
+        <td>${escapeHtml(r.contractor || '-')}</td>
+        <td>${escapeHtml(r.inputBy || '-')}</td>
+        <td>¥${Number(r.cost).toLocaleString()}</td>
+        <td>${r.photo ? `<img class="photo-thumb" src="${r.photo}" data-id="${r.id}">` : '-'}</td>
+        <td>
+          <button class="outline" data-edit="${r.id}">編集</button>
+          <button class="danger" data-del="${r.id}">削除</button>
+        </td>
+      </tr>`;
+    });
   });
   html += `</table>`;
   wrap.innerHTML = html;
@@ -1533,7 +1572,7 @@ document.getElementById('photoModal').addEventListener('click', () => {
   document.getElementById('photoModal').style.display = 'none';
 });
 
-// ---- PDF site-plan plotting ----
+// ---- Site-plan plotting (accepts a PDF or a photo/image file) ----
 document.getElementById('pdfUpload').addEventListener('change', (e) => {
   const file = e.target.files[0];
   const gs = getGreen(currentId);
@@ -1542,6 +1581,7 @@ document.getElementById('pdfUpload').addEventListener('change', (e) => {
   reader.onload = () => {
     gs.pdf = reader.result;
     gs.pdfName = file.name;
+    gs.pdfMime = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
     if (!gs.pdfPins) gs.pdfPins = [];
     save();
     renderPdfSection(gs);
@@ -1563,9 +1603,29 @@ function renderPdfSection(gs) {
     controls.style.display = 'none';
     return;
   }
-  fileNameEl.textContent = '読み込み中... (' + (gs.pdfName || 'PDF') + ')';
+  fileNameEl.textContent = '読み込み中... (' + (gs.pdfName || 'ファイル') + ')';
   holder.style.display = 'inline-block';
   controls.style.display = 'block';
+
+  const isImage = (gs.pdfMime && gs.pdfMime.startsWith('image/')) || !gs.pdf.startsWith('data:application/pdf');
+
+  if (isImage) {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('pdfCanvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      fileNameEl.textContent = '読込済み: ' + (gs.pdfName || '画像');
+      renderPdfPins(gs);
+    };
+    img.onerror = () => {
+      fileNameEl.textContent = '画像の読み込みに失敗しました';
+    };
+    img.src = gs.pdf;
+    return;
+  }
 
   const base64 = gs.pdf.split(',')[1];
   const binary = atob(base64);
