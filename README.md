@@ -32,3 +32,11 @@
 - 素のHTML / CSS / JavaScript（フレームワーク不使用）
 - [Leaflet](https://leafletjs.com/) + OpenStreetMap（地図表示）
 - [PDF.js](https://mozilla.github.io/pdf.js/)（PDF表示）
+
+## ライセンス・著作権について
+
+© hwatanabe829-lang. All rights reserved.
+
+本リポジトリはソースコードの閲覧を目的として公開していますが、オープンソースライセンスは付与していません。
+著作権法上の保護下にあり、**第三者による無断の複製・改変・再配布・商用利用は許可していません**。
+利用・転用をご希望の場合は、リポジトリのIssue等でご連絡ください。
