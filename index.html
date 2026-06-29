@@ -631,6 +631,7 @@ let repositionTargetId = null;  // move existing green space's map pin
 let currentId = null;
 let editingRecordId = null;
 let pinAddMode = false;
+let hasAutoZoomed = false; // only force a zoom-in the first time any green space is opened
 let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree marker directly on the site-plan canvas
 let markers = {};
 let treeMarkers = {};
@@ -798,7 +799,6 @@ function renderGreenList() {
       <div class="sub">記録数: ${gs.records.length}件 / 総支出: ¥${totalSpent.toLocaleString()}</div>
       ${latest ? `<div class="sub">最新: <span class="status-badge">${escapeHtml(latest.status||'-')}</span></div>` : ''}`;
     div.addEventListener('click', () => {
-      if (gs.lat != null) map.setView([gs.lat, gs.lng], 16);
       openDetail(gs.id);
     });
     wrap.appendChild(div);
@@ -1138,7 +1138,13 @@ function openDetail(id) {
   const gs = getGreen(id);
   if (!gs) return;
   if (gs.lat != null && gs.lng != null) {
-    map.setView([gs.lat, gs.lng], Math.max(map.getZoom(), 17), { animate: false });
+    if (!hasAutoZoomed) {
+      // Only force a zoom-in the very first time a green space is opened; afterwards just pan/recenter.
+      map.setView([gs.lat, gs.lng], Math.max(map.getZoom(), 17), { animate: false });
+      hasAutoZoomed = true;
+    } else {
+      map.setView([gs.lat, gs.lng], map.getZoom(), { animate: false });
+    }
   }
   resetRecordForm();
   document.getElementById('detail').style.display = 'block';
