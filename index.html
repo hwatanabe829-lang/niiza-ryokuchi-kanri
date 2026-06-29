@@ -423,6 +423,18 @@
     font-weight: bold;
     white-space: nowrap;
   }
+  .seq-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: bold;
+    white-space: nowrap;
+    background: #e0e0e0;
+    color: #444;
+  }
+  .seq-badge.current { background: #2e7d32; color: white; }
+  .seq-badge.next { background: #ffb300; color: #4a3200; }
 </style>
 </head>
 <body>
@@ -805,6 +817,25 @@ function treeWorksSummary(t) {
   if (works.length === 0) return '作業未登録';
   return works.map(w => `${w.type}${w.done ? '済' : '予定'}${w.date ? '(' + w.date + ')' : ''}`).join('、');
 }
+// Order a tree's work history for display and label the pending ones 今回/次回/n回目予定
+// so it's clear which job is happening now vs. what's queued up for later.
+function sortWorksForDisplay(works) {
+  const sorted = (works || []).slice().sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1; // pending first, history after
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+  let pendingSeq = 0;
+  return sorted.map(w => {
+    if (w.done) return { ...w, seqLabel: '', seqClass: '' };
+    pendingSeq++;
+    const seqLabel = pendingSeq === 1 ? '今回' : (pendingSeq === 2 ? '次回' : `${pendingSeq}回目予定`);
+    const seqClass = pendingSeq === 1 ? 'current' : (pendingSeq === 2 ? 'next' : 'later');
+    return { ...w, seqLabel, seqClass };
+  });
+}
 function renderTreeMarkers() {
   Object.values(treeMarkers).forEach(m => map.removeLayer(m));
   treeMarkers = {};
@@ -839,8 +870,9 @@ function renderTreeMarkerList(gs) {
       </div>
       ${t.photo ? `<img class="photo-thumb" src="${t.photo}" data-tree-photo-view="${t.id}">` : ''}
       <div class="tree-works-list">
-        ${(t.works || []).map(w => `
+        ${sortWorksForDisplay(t.works).map(w => `
           <div class="work-row${w.done ? ' done' : ''}">
+            ${w.seqLabel ? `<span class="seq-badge ${w.seqClass}">${w.seqLabel}</span>` : ''}
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
             <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
             <label class="work-done-check"><input type="checkbox" data-work-done="${t.id}|${w.id}" ${w.done ? 'checked' : ''}>対応済み</label>
