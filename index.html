@@ -386,6 +386,43 @@
   .tree-item label { display: flex; align-items: center; gap: 4px; flex: 1; margin: 0; }
   .tree-item input[type="checkbox"] { width: auto; }
   .tree-item.felled { opacity: 0.6; text-decoration: line-through; }
+
+  .tree-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #fafafa;
+  }
+  .tree-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .tree-card-header strong { font-size: 13px; }
+  .tree-works-list { margin: 6px 0; }
+  .work-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    padding: 4px 6px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .work-row.done { background: #f1f8e9; }
+  .work-row input[type="date"] { width: auto; padding: 2px 4px; font-size: 11px; }
+  .work-row input[type="text"] { flex: 1; min-width: 80px; padding: 2px 4px; font-size: 11px; }
+  .work-row input[type="checkbox"] { width: auto; }
+  .work-done-check { display: flex; align-items: center; gap: 2px; margin: 0; white-space: nowrap; }
+  .work-type-badge {
+    font-weight: bold;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -488,7 +525,7 @@
 
   <h3>🌳 伐採・剪定予定の木</h3>
   <div id="treeMarkerList"></div>
-  <small class="help">下の「📄敷地図にプロット」で配置した🪓伐採／✂️剪定の木がここに一覧表示されます。対応が済んだらチェックを入れてください。チェック済みの本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
+  <small class="help">下の「📄敷地図にプロット」で配置した木がここに一覧表示されます。樹径・状況写真を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。「対応済み」にチェックした作業の本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -731,19 +768,42 @@ function renderMarkers() {
 }
 
 // ---- 伐採・剪定予定の木 markers (shown on the main map across all green spaces) ----
-// Backward compat: markers created before the 伐採/剪定 split only had `felled`; treat those as type 伐採.
+// Each tree can have several work events over time (例: 今年2回剪定、来年伐採)、樹径・状況写真も持てる。
+// Backward compat: markers created before this redesign had a single top-level type/done/consumedBy.
 function normalizeTreeMarker(t) {
-  if (!t.type) t.type = '伐採';
-  if (t.done == null) t.done = !!t.felled;
+  if (!t.works) {
+    t.works = [{
+      id: uid(),
+      type: t.type || '伐採',
+      date: t.date || null,
+      note: '',
+      done: !!(t.done || t.felled),
+      consumedBy: t.consumedBy || null
+    }];
+  }
+  if (t.diameter === undefined) t.diameter = null;
+  if (t.photo === undefined) t.photo = null;
   return t;
 }
-function treeIcon(type, done) {
+function treeMarkerIconEmoji(t) {
+  const works = t.works || [];
+  const pending = works.find(w => !w.done);
+  if (pending) return pending.type === '剪定' ? '✂️' : '🪓';
+  if (works.length > 0) return '✅';
+  return '🌳';
+}
+function treeIconDivIcon(t) {
   return L.divIcon({
     className: 'tree-marker-icon',
-    html: done ? '✅' : (type === '剪定' ? '✂️' : '🪓'),
+    html: treeMarkerIconEmoji(t),
     iconSize: [22, 22],
     iconAnchor: [11, 11]
   });
+}
+function treeWorksSummary(t) {
+  const works = t.works || [];
+  if (works.length === 0) return '作業未登録';
+  return works.map(w => `${w.type}${w.done ? '済' : '予定'}${w.date ? '(' + w.date + ')' : ''}`).join('、');
 }
 function renderTreeMarkers() {
   Object.values(treeMarkers).forEach(m => map.removeLayer(m));
@@ -752,8 +812,8 @@ function renderTreeMarkers() {
     (gs.treeMarkers || []).forEach(t => {
       normalizeTreeMarker(t);
       if (t.lat == null || t.lng == null) return; // PDF-only markers (x/y) aren't shown on the main map
-      const marker = L.marker([t.lat, t.lng], { icon: treeIcon(t.type, t.done) }).addTo(map);
-      marker.bindTooltip(`${gs.name}：${t.label}（${t.type}・${t.done ? '対応済み' : '未対応'}）`);
+      const marker = L.marker([t.lat, t.lng], { icon: treeIconDivIcon(t) }).addTo(map);
+      marker.bindTooltip(`${gs.name}：${t.label}（${treeWorksSummary(t)}）`);
       marker.on('click', () => openDetail(gs.id));
       treeMarkers[t.id] = marker;
     });
@@ -768,19 +828,113 @@ function renderTreeMarkerList(gs) {
     return;
   }
   wrap.innerHTML = list.map(t => `
-    <div class="tree-item${t.done ? ' felled' : ''}">
-      <label>
-        <input type="checkbox" data-done="${t.id}" ${t.done ? 'checked' : ''}>
-        ${t.type === '剪定' ? '✂️' : '🪓'} ${escapeHtml(t.label)}
-        ${t.consumedBy ? '<span class="env-tax-badge" style="margin-left:4px;">記録済み</span>' : ''}
-      </label>
-      <button class="danger" data-del-tree="${t.id}">削除</button>
+    <div class="tree-card">
+      <div class="tree-card-header">
+        <strong>${treeMarkerIconEmoji(t)} ${escapeHtml(t.label)}</strong>
+        <button class="danger" data-del-tree="${t.id}">この木を削除</button>
+      </div>
+      <div class="row2">
+        <div class="field"><label>樹径（cm）</label><input type="number" data-diameter="${t.id}" value="${t.diameter != null ? t.diameter : ''}" placeholder="例: 30"></div>
+        <div class="field"><label>状況写真</label><input type="file" accept="image/*" data-tree-photo="${t.id}"></div>
+      </div>
+      ${t.photo ? `<img class="photo-thumb" src="${t.photo}" data-tree-photo-view="${t.id}">` : ''}
+      <div class="tree-works-list">
+        ${(t.works || []).map(w => `
+          <div class="work-row${w.done ? ' done' : ''}">
+            <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
+            <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
+            <label class="work-done-check"><input type="checkbox" data-work-done="${t.id}|${w.id}" ${w.done ? 'checked' : ''}>対応済み</label>
+            <input type="text" data-work-note="${t.id}|${w.id}" value="${escapeHtml(w.note || '')}" placeholder="メモ（状況など）">
+            ${w.consumedBy ? '<span class="env-tax-badge">記録済み</span>' : ''}
+            <button class="danger" data-del-work="${t.id}|${w.id}">削除</button>
+          </div>
+        `).join('') || '<div class="empty-msg">作業履歴はまだありません</div>'}
+      </div>
+      <div class="row2">
+        <button class="outline" data-add-work="${t.id}|伐採">🪓 伐採の作業を追加</button>
+        <button class="outline" data-add-work="${t.id}|剪定">✂️ 剪定の作業を追加</button>
+      </div>
     </div>
   `).join('');
-  wrap.querySelectorAll('input[data-done]').forEach(cb => {
+
+  wrap.querySelectorAll('input[data-diameter]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const t = gs.treeMarkers.find(x => x.id === inp.dataset.diameter);
+      if (t) { t.diameter = inp.value === '' ? null : Number(inp.value); save(); }
+    });
+  });
+  wrap.querySelectorAll('input[data-tree-photo]').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const t = gs.treeMarkers.find(x => x.id === inp.dataset.treePhoto);
+      if (!file || !t) return;
+      const reader = new FileReader();
+      reader.onload = () => { t.photo = reader.result; save(); renderTreeMarkerList(gs); };
+      reader.readAsDataURL(file);
+    });
+  });
+  wrap.querySelectorAll('img[data-tree-photo-view]').forEach(img => {
+    img.addEventListener('click', () => {
+      document.getElementById('photoModalImg').src = img.src;
+      document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
+  wrap.querySelectorAll('input[data-work-date]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const [treeId, workId] = inp.dataset.workDate.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (w) { w.date = inp.value; save(); renderTreeMarkers(); }
+    });
+  });
+  wrap.querySelectorAll('input[data-work-note]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const [treeId, workId] = inp.dataset.workNote.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (w) { w.note = inp.value; save(); }
+    });
+  });
+  wrap.querySelectorAll('input[data-work-done]').forEach(cb => {
     cb.addEventListener('change', () => {
-      const t = gs.treeMarkers.find(x => x.id === cb.dataset.done);
-      if (t) { t.done = cb.checked; save(); renderTreeMarkers(); renderTreeMarkerList(gs); }
+      const [treeId, workId] = cb.dataset.workDone.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (w) {
+        w.done = cb.checked;
+        if (w.done && !w.date) w.date = new Date().toISOString().slice(0, 10);
+        save();
+        renderTreeMarkers();
+        renderPdfPins(gs);
+        renderTreeMarkerList(gs);
+      }
+    });
+  });
+  wrap.querySelectorAll('button[data-add-work]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [treeId, type] = btn.dataset.addWork.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      if (!t) return;
+      if (!t.works) t.works = [];
+      t.works.push({ id: uid(), type, date: null, note: '', done: false, consumedBy: null });
+      save();
+      renderTreeMarkers();
+      renderPdfPins(gs);
+      renderTreeMarkerList(gs);
+    });
+  });
+  wrap.querySelectorAll('button[data-del-work]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この作業履歴を削除しますか？')) return;
+      const [treeId, workId] = btn.dataset.delWork.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      if (t) {
+        t.works = t.works.filter(w => w.id !== workId);
+        save();
+        renderTreeMarkers();
+        renderPdfPins(gs);
+        renderTreeMarkerList(gs);
+      }
     });
   });
   wrap.querySelectorAll('button[data-del-tree]').forEach(btn => {
@@ -789,6 +943,7 @@ function renderTreeMarkerList(gs) {
       gs.treeMarkers = gs.treeMarkers.filter(t => t.id !== btn.dataset.delTree);
       save();
       renderTreeMarkers();
+      renderPdfPins(gs);
       renderTreeMarkerList(gs);
     });
   });
@@ -849,17 +1004,23 @@ function renderRecTypeSelect() {
   renderItemQtyFields(sel.value);
 }
 
-// ---- Linking map-plotted trees to work record quantities ----
-// A tree marker counts as "available" once marked 対応済み(done) and not yet claimed by a record.
+// ---- Linking plotted trees' work history to work record quantities ----
+// A tree can have several work events over time; each one counts as "available" once
+// marked 対応済み(done) and not yet claimed by a record.
+function allWorks(gs) {
+  const out = [];
+  (gs.treeMarkers || []).forEach(t => (t.works || []).forEach(w => out.push(w)));
+  return out;
+}
 function countAvailableTreeMarkers(gs, type) {
-  return (gs.treeMarkers || []).filter(t => t.type === type && t.done && !t.consumedBy).length;
+  return allWorks(gs).filter(w => w.type === type && w.done && !w.consumedBy).length;
 }
 function consumeTreeMarkers(gs, type, count, recordId) {
-  const avail = (gs.treeMarkers || []).filter(t => t.type === type && t.done && !t.consumedBy);
-  avail.slice(0, count).forEach(t => { t.consumedBy = recordId; });
+  const avail = allWorks(gs).filter(w => w.type === type && w.done && !w.consumedBy);
+  avail.slice(0, count).forEach(w => { w.consumedBy = recordId; });
 }
 function releaseTreeMarkers(gs, recordId) {
-  (gs.treeMarkers || []).forEach(t => { if (t.consumedBy === recordId) t.consumedBy = null; });
+  allWorks(gs).forEach(w => { if (w.consumedBy === recordId) w.consumedBy = null; });
 }
 
 // Each work type has a natural unit: 草刈り/清掃→㎡、剪定→強剪定/弱剪定+本数、伐採→本。
@@ -1672,8 +1833,8 @@ function renderPdfPins(gs) {
     icon.className = 'pdf-tree-icon';
     icon.style.left = t.x + '%';
     icon.style.top = t.y + '%';
-    icon.textContent = t.done ? '✅' : (t.type === '剪定' ? '✂️' : '🪓');
-    icon.title = `${t.label}（${t.type}・${t.done ? '対応済み' : '未対応'}）`;
+    icon.textContent = treeMarkerIconEmoji(t);
+    icon.title = `${t.label}（${treeWorksSummary(t)}）`;
     layer.appendChild(icon);
   });
   renderPinList(gs);
@@ -1734,7 +1895,10 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
     const label = prompt('木の名称・説明を入力してください', type === '剪定' ? '剪定予定の木' : '伐採予定の木');
     if (label) {
       if (!gs.treeMarkers) gs.treeMarkers = [];
-      gs.treeMarkers.push({ id: uid(), x, y, label, type, done: false, consumedBy: null });
+      gs.treeMarkers.push({
+        id: uid(), x, y, label, diameter: null, photo: null,
+        works: [{ id: uid(), type, date: null, note: '', done: false, consumedBy: null }]
+      });
       save();
       renderPdfPins(gs);
       renderTreeMarkerList(gs);
