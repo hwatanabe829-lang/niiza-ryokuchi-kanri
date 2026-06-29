@@ -435,6 +435,26 @@
   }
   .seq-badge.current { background: #2e7d32; color: white; }
   .seq-badge.next { background: #ffb300; color: #4a3200; }
+
+  .work-pick-list {
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    background: white;
+    margin-top: 4px;
+  }
+  .work-pick-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    padding: 3px 0;
+    margin: 0;
+  }
+  .work-pick-item input[type="checkbox"] { width: auto; }
+  .picked-count-line { font-size: 12px; margin-top: 4px; color: #333; }
 </style>
 </head>
 <body>
@@ -1057,21 +1077,66 @@ function releaseTreeMarkers(gs, recordId) {
 
 // Each work type has a natural unit: 草刈り/清掃→㎡、剪定→強剪定/弱剪定+本数、伐採→本。
 // Custom/other types fall back to a free quantity + unit field.
+// For 伐採/剪定, list every tree's not-yet-claimed work of that type so the user can pick
+// exactly which trees this work session covers (one session often does several different trees).
+function collectPickableWorks(gs, type) {
+  const out = [];
+  (gs.treeMarkers || []).forEach(t => {
+    normalizeTreeMarker(t);
+    (t.works || []).forEach(w => {
+      if (w.type === type && !w.consumedBy) {
+        out.push({ treeId: t.id, treeLabel: t.label, workId: w.id, date: w.date, done: w.done });
+      }
+    });
+  });
+  out.sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+  return out;
+}
+
+function updatePickedWorkCount() {
+  const wrap = document.getElementById('itemQtyWrap');
+  const checked = wrap.querySelectorAll('input[data-pick-work]:checked').length;
+  const countEl = document.getElementById('pickedWorkCount');
+  const qtyEl = document.getElementById('itemQty');
+  if (countEl) countEl.textContent = checked;
+  if (qtyEl) qtyEl.value = checked;
+}
+
 function renderItemQtyFields(typeVal) {
   const wrap = document.getElementById('itemQtyWrap');
   const gs = getGreen(currentId);
   if (typeVal === '草刈り' || typeVal === '清掃') {
     wrap.innerHTML = `<label>面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
   } else if (typeVal === '剪定' || typeVal === '伐採') {
-    const available = gs ? countAvailableTreeMarkers(gs, typeVal) : 0;
     const icon = typeVal === '剪定' ? '✂️' : '🪓';
     const subTypeHtml = typeVal === '剪定'
       ? `<select id="itemSubType"><option value="強剪定">強剪定</option><option value="弱剪定">弱剪定</option></select>`
       : '';
-    wrap.innerHTML = `<label>本数（本）</label>
+    const candidates = gs ? collectPickableWorks(gs, typeVal) : [];
+    wrap.innerHTML = `<label>対象の木を選択（この作業でやった分にチェック）</label>
       ${subTypeHtml}
-      <input type="number" id="itemQty" placeholder="例: 5" value="${available || ''}" style="margin-top:4px;">
-      ${available > 0 ? `<small class="help">${icon} 地図で対応済みにした木: ${available}本（自動入力・編集可）</small>` : ''}`;
+      <div class="work-pick-list">
+        ${candidates.length
+          ? candidates.map(c => `
+            <label class="work-pick-item">
+              <input type="checkbox" data-pick-work="${c.treeId}|${c.workId}" ${!c.done ? 'checked' : ''}>
+              ${icon} ${escapeHtml(c.treeLabel)} ${c.date ? `(${escapeHtml(c.date)})` : '(日付未設定)'} ${c.done ? '<span class="env-tax-badge">対応済み</span>' : ''}
+            </label>
+          `).join('')
+          : `<div class="empty-msg">対象の木が登録されていません（敷地図で先に木を登録してください）</div>`}
+      </div>
+      <div class="picked-count-line">選択本数: <b id="pickedWorkCount">0</b>本</div>
+      <input type="hidden" id="itemQty" value="0">`;
+    wrap.querySelectorAll('input[data-pick-work]').forEach(cb => {
+      cb.addEventListener('change', updatePickedWorkCount);
+    });
+    updatePickedWorkCount();
   } else {
     wrap.innerHTML = `<label>数量・単位</label>
       <input type="number" id="itemQty" placeholder="数量" style="margin-bottom:4px;">
@@ -1514,20 +1579,28 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
   const cost = document.getElementById('itemCost').value;
   if (!type || cost === '') { alert('種別と費用は必須です'); return; }
   let unit = '';
+  let workRefs = null;
   if (type === '草刈り' || type === '清掃') unit = '㎡';
-  else if (type === '伐採' || type === '剪定') unit = '本';
-  else unit = unitEl ? unitEl.value.trim() : '';
+  else if (type === '伐採' || type === '剪定') {
+    unit = '本';
+    workRefs = Array.from(document.querySelectorAll('input[data-pick-work]:checked')).map(cb => {
+      const [treeId, workId] = cb.dataset.pickWork.split('|');
+      return { treeId, workId };
+    });
+    if (workRefs.length === 0) { alert('対象の木を1本以上選んでください'); return; }
+  } else unit = unitEl ? unitEl.value.trim() : '';
   currentItems.push({
     id: uid(),
     type,
     subType: subTypeEl ? subTypeEl.value : '',
     qty: qtyEl && qtyEl.value !== '' ? Number(qtyEl.value) : null,
     unit,
-    cost: Number(cost)
+    cost: Number(cost),
+    workRefs
   });
   renderItemListWrap();
   document.getElementById('itemCost').value = '';
-  if (qtyEl) qtyEl.value = '';
+  renderItemQtyFields(type);
 });
 
 function resetRecordForm() {
@@ -1611,8 +1684,17 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   // Claim the map-plotted trees this record's items draw on (editing already released its old claims above).
   if (recordId) {
     currentItems.forEach(item => {
-      if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
-        consumeTreeMarkers(gs, item.type, item.qty, recordId);
+      if ((item.type === '伐採' || item.type === '剪定') && item.workRefs && item.workRefs.length) {
+        // Mark exactly the trees/work entries picked for this item as done-by-this-record.
+        item.workRefs.forEach(ref => {
+          const t = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+          const w = t && t.works && t.works.find(x => x.id === ref.workId);
+          if (w) {
+            w.done = true;
+            if (!w.date) w.date = date;
+            w.consumedBy = recordId;
+          }
+        });
       }
     });
   }
@@ -1689,7 +1771,15 @@ function renderRecordTable(gs) {
         ? items.map(it => {
             const t = it.subType ? `${it.type}(${it.subType})` : it.type;
             const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
-            return escapeHtml(t + (q ? ' ' + q : ''));
+            let treeNames = '';
+            if (it.workRefs && it.workRefs.length) {
+              const names = it.workRefs.map(ref => {
+                const tree = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+                return tree ? tree.label : null;
+              }).filter(Boolean);
+              if (names.length) treeNames = `[${names.join('・')}]`;
+            }
+            return escapeHtml(t + (q ? ' ' + q : '') + (treeNames ? ' ' + treeNames : ''));
           }).join('、')
         : escapeHtml(r.type || '-');
       const isComplete = r.status === FINAL_STATUS;
