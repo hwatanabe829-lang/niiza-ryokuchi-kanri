@@ -297,6 +297,21 @@
     margin-top: 4px;
   }
 
+  #recDetailsMore {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 10px 0;
+    background: #fafafa;
+  }
+  #recDetailsMore summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--green);
+  }
+  #recDetailsMore[open] summary { margin-bottom: 8px; }
+
   /* Prominent budget card: left = amounts/usage, right = which-budget selector */
   .budget-card {
     display: flex;
@@ -661,26 +676,7 @@
 
   <h3>保全作業記録の追加（<span id="recordYearLabel">-</span>年度）</h3>
   <div class="editing-banner" id="editingBanner">✏️ この記録を編集中です（保存すると上書きされます）</div>
-  <div class="row2">
-    <div class="field"><label>実施日</label><input type="date" id="recDate"></div>
-    <div class="field">
-      <label>進捗状況</label>
-      <select id="recStatus"></select>
-    </div>
-  </div>
-  <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
-  <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
-  <div class="field"><label>この作業で使う予算の種類</label><select id="recBudgetCategory"></select></div>
-  <div class="checkbox-field">
-    <input type="checkbox" id="recEnvTax">
-    <label for="recEnvTax">🌲 環境譲与税案件</label>
-    <span id="recEnvTaxInfo" style="margin-left:auto; font-size:12px; color:#1b5e20; display:none;"></span>
-  </div>
-  <div class="field">
-    <label>作業前の写真</label>
-    <input type="file" id="recPhoto" accept="image/*">
-    <img id="recPhotoPreview" class="photo-thumb" style="display:none;">
-  </div>
+  <div class="field"><label>実施日</label><input type="date" id="recDate"></div>
 
   <h4>作業項目（複数追加できます）</h4>
   <div class="field">
@@ -693,6 +689,31 @@
   </div>
   <button id="btnAddItem" style="width:100%; margin-bottom:10px;">＋ 項目を追加</button>
   <div id="itemListWrap"></div>
+
+  <details id="recDetailsMore">
+    <summary>詳細情報（進捗・担当・予算・写真）</summary>
+    <div class="row2">
+      <div class="field">
+        <label>進捗状況</label>
+        <select id="recStatus"></select>
+      </div>
+      <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
+      <div class="field"><label>この作業で使う予算の種類</label><select id="recBudgetCategory"></select></div>
+    </div>
+    <div class="checkbox-field">
+      <input type="checkbox" id="recEnvTax">
+      <label for="recEnvTax">🌲 環境譲与税案件</label>
+      <span id="recEnvTaxInfo" style="margin-left:auto; font-size:12px; color:#1b5e20; display:none;"></span>
+    </div>
+    <div class="field">
+      <label>作業前の写真</label>
+      <input type="file" id="recPhoto" accept="image/*">
+      <img id="recPhotoPreview" class="photo-thumb" style="display:none;">
+    </div>
+  </details>
 
   <button id="btnAddRecord" style="margin-top:10px;">記録を追加</button>
   <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
@@ -1656,6 +1677,7 @@ function resetRecordForm() {
   document.getElementById('recPhoto').value = '';
   document.getElementById('recPhotoPreview').style.display = 'none';
   document.getElementById('recPhotoPreview').src = '';
+  document.getElementById('recDetailsMore').open = false;
   document.getElementById('itemCost').value = '';
   renderRecTypeSelect();
   renderRecStatusSelect();
@@ -1762,6 +1784,7 @@ function editRecord(gs, recId) {
   renderTreeMarkers();
   renderYearSelect(gs);
   document.getElementById('editingBanner').style.display = 'block';
+  document.getElementById('recDetailsMore').open = true;
   document.getElementById('btnAddRecord').textContent = '記録を更新';
   document.getElementById('btnCancelEdit').style.display = 'inline-block';
   document.getElementById('recDate').value = r.date;
