@@ -369,6 +369,33 @@
     text-align: right;
   }
   .budget-card-side select { font-size: 12px; padding: 3px 4px; }
+  .budget-card-side input[type="number"] { font-size: 12px; padding: 3px 4px; width: 110px; }
+  .budget-card-side button { margin-top: 4px; }
+
+  .budget-cat-records {
+    margin: 0 0 10px;
+  }
+  .budget-cat-records summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--green);
+    font-weight: bold;
+    margin-top: -6px;
+    margin-bottom: 6px;
+  }
+  .budget-cat-record-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    padding: 4px 6px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .budget-cat-record-row .brow-cost { margin-left: auto; font-weight: bold; }
 
   /* Global 環境譲与税 usage box (sidebar, narrower than the per-green-space card) */
   .envtax-box {
@@ -630,8 +657,15 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
+  <h3>🗂️ 作業回ごとの管理（<span id="roundYearLabel">-</span>年度）</h3>
+  <small class="help">保全作業記録を「回」として一覧表示します。行の「この回を地図で見る」を押すと、下の敷地図にその回の対象（伐採・剪定予定の木）だけが表示されます。</small>
+  <div id="roundTableWrap" style="margin-top:8px;"></div>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
   <h3>📄 敷地図にプロット</h3>
   <div class="pdf-wrap">
+    <div class="editing-banner" id="roundFilterBanner"></div>
     <div class="field">
       <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
       <input type="file" id="pdfUpload" accept="application/pdf,image/*">
@@ -653,24 +687,8 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況</h3>
-  <div class="budget-card">
-    <div class="budget-card-main">
-      <div class="budget-cat-name" id="budgetCatName">-</div>
-      <div class="budget-amounts">
-        <span id="budgetUsedAmt">¥0</span><span class="budget-slash">/</span><span class="budget-total" id="budgetTotalAmt">未設定</span>
-      </div>
-      <div class="budget-progress-track"><div class="budget-progress-fill" id="budgetProgressFill" style="width:0%;"></div></div>
-      <div class="budget-percent" id="budgetPercent">-</div>
-      <div class="budget-remain" id="budgetRemainAmt"></div>
-    </div>
-    <div class="budget-card-side">
-      <label>表示する予算の種類</label>
-      <select id="budgetCategorySelect"></select>
-    </div>
-  </div>
-  <div class="field"><label>この予算の金額を設定/更新（円）</label><input type="number" id="budgetAmount" placeholder="500000"></div>
-  <button id="btnSetBudget">設定/更新</button>
+  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと）</h3>
+  <div id="budgetCardsWrap"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -776,6 +794,7 @@ let editingRecordId = null;
 let pinAddMode = false;
 let hasAutoZoomed = false; // only force a zoom-in the first time any green space is opened
 let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree marker directly on the site-plan canvas
+let selectedRoundId = null; // record id whose site-plan trees are being isolated in the "作業回ごとの管理" table
 let markers = {};
 let treeMarkers = {};
 
@@ -1251,7 +1270,6 @@ function renderBudgetCatTags() {
       renderBudgetCatTags();
       const gs = getGreen(currentId);
       if (gs) {
-        renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
         renderBudgetCategorySelectInto('recBudgetCategory');
         renderBudgetCard(gs);
       }
@@ -1269,8 +1287,8 @@ document.getElementById('btnAddBudgetCat').addEventListener('click', () => {
   renderBudgetCatTags();
   const gs = getGreen(currentId);
   if (gs) {
-    renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
     renderBudgetCategorySelectInto('recBudgetCategory');
+    renderBudgetCard(gs);
   }
 });
 // Generic helper: populate a <select> from a list, keeping/choosing a sensible selected value
@@ -1443,10 +1461,12 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
   if (!gs) return;
   gs.selectedYear = Number(e.target.value);
   save();
+  selectedRoundId = null;
   document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
   document.getElementById('recordYearLabel').textContent = gs.selectedYear;
   renderBudgetCard(gs);
   renderRecordTable(gs);
+  renderPdfPins(gs);
 });
 
 document.getElementById('btnAddYear').addEventListener('click', () => {
@@ -1459,14 +1479,17 @@ document.getElementById('btnAddYear').addEventListener('click', () => {
   if (!gs.years.includes(y)) gs.years.push(y);
   gs.selectedYear = y;
   save();
+  selectedRoundId = null;
   input.value = '';
   renderYearSelect(gs);
   renderBudgetCard(gs);
   renderRecordTable(gs);
+  renderPdfPins(gs);
 });
 
 function openDetail(id) {
   currentId = id;
+  selectedRoundId = null;
   const gs = getGreen(id);
   if (!gs) return;
   if (gs.lat != null && gs.lng != null) {
@@ -1526,71 +1549,101 @@ function ensureBudgetsShape(gs) {
     }
   });
 }
-function ensureDisplayBudgetCategory(gs) {
-  if (!gs.displayBudgetCategory || !budgetCategories.includes(gs.displayBudgetCategory)) {
-    gs.displayBudgetCategory = budgetCategories[0] || '通常予算';
-  }
+
+// Renders one card per budget category (all shown at once, no switching), each with its
+// own amount/progress and a collapsible list of just that category's work records.
+function budgetCatRecordRowHtml(gs, r) {
+  const items = r.items || [];
+  const itemsLabel = items.length
+    ? items.map(it => {
+        const t = it.subType ? `${it.type}(${it.subType})` : it.type;
+        const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
+        return escapeHtml(t + (q ? ' ' + q : ''));
+      }).join('、')
+    : escapeHtml(r.type || '-');
+  return `<div class="budget-cat-record-row">
+    <span>${escapeHtml(r.date || '-')}</span>
+    <span>${itemsLabel}</span>
+    <span class="status-badge">${escapeHtml(r.status || '-')}</span>
+    <span class="brow-cost">¥${Number(r.cost || 0).toLocaleString()}</span>
+    <button class="outline" data-cat-edit="${r.id}">編集</button>
+  </div>`;
 }
 
 function renderBudgetCard(gs) {
   ensureBudgetsShape(gs);
-  ensureDisplayBudgetCategory(gs);
-  renderBudgetCategorySelectInto('budgetCategorySelect', gs.displayBudgetCategory);
-
+  const wrap = document.getElementById('budgetCardsWrap');
   const y = gs.selectedYear;
-  const cat = gs.displayBudgetCategory;
   const budgetForYear = gs.budgets[y] || {};
-  const total = budgetForYear[cat];
-  const spent = gs.records
-    .filter(r => String(r.year) === String(y) && (r.budgetCategory || budgetCategories[0]) === cat)
-    .reduce((s, r) => s + Number(r.cost || 0), 0);
 
-  document.getElementById('budgetCatName').textContent = cat;
-  document.getElementById('budgetUsedAmt').textContent = '¥' + spent.toLocaleString();
-  document.getElementById('budgetAmount').value = total != null ? total : '';
-
-  const fillEl = document.getElementById('budgetProgressFill');
-  const percentEl = document.getElementById('budgetPercent');
-  const remainEl = document.getElementById('budgetRemainAmt');
-
-  if (total == null) {
-    document.getElementById('budgetTotalAmt').textContent = '未設定';
-    fillEl.style.width = '0%';
-    fillEl.style.background = '#ccc';
-    percentEl.textContent = 'この予算はまだ設定されていません';
-    remainEl.textContent = '';
-    remainEl.className = 'budget-remain';
+  if (budgetCategories.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">予算の種類が登録されていません（左のサイドバーから追加してください）</div>';
     return;
   }
-  const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
-  document.getElementById('budgetTotalAmt').textContent = '¥' + Number(total).toLocaleString();
-  fillEl.style.width = Math.min(pct, 100) + '%';
-  fillEl.style.background = pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32');
-  percentEl.textContent = pct + '% 使用';
-  const remain = total - spent;
-  remainEl.textContent = '残額: ¥' + remain.toLocaleString() + (remain < 0 ? '（予算超過）' : '');
-  remainEl.className = 'budget-remain' + (remain < 0 ? ' over' : '');
+
+  wrap.innerHTML = budgetCategories.map((cat, i) => {
+    const total = budgetForYear[cat];
+    const recordsForCat = gs.records
+      .filter(r => String(r.year) === String(y) && (r.budgetCategory || budgetCategories[0]) === cat)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const spent = recordsForCat.reduce((s, r) => s + Number(r.cost || 0), 0);
+
+    let bodyHtml;
+    if (total == null) {
+      bodyHtml = `
+        <div class="budget-amounts"><span>¥${spent.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">未設定</span></div>
+        <div class="budget-progress-track"><div class="budget-progress-fill" style="width:0%; background:#ccc;"></div></div>
+        <div class="budget-percent">この予算はまだ設定されていません</div>
+        <div class="budget-remain"></div>`;
+    } else {
+      const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
+      const remain = total - spent;
+      bodyHtml = `
+        <div class="budget-amounts"><span>¥${spent.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">¥${Number(total).toLocaleString()}</span></div>
+        <div class="budget-progress-track"><div class="budget-progress-fill" style="width:${Math.min(pct, 100)}%; background:${pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>
+        <div class="budget-percent">${pct}% 使用</div>
+        <div class="budget-remain${remain < 0 ? ' over' : ''}">残額: ¥${remain.toLocaleString()}${remain < 0 ? '（予算超過）' : ''}</div>`;
+    }
+
+    const recordRowsHtml = recordsForCat.length
+      ? recordsForCat.map(r => budgetCatRecordRowHtml(gs, r)).join('')
+      : '<div class="empty-msg">この予算の作業記録はまだありません</div>';
+
+    return `
+      <div class="budget-card">
+        <div class="budget-card-main">
+          <div class="budget-cat-name">${escapeHtml(cat)}</div>
+          ${bodyHtml}
+        </div>
+        <div class="budget-card-side">
+          <label>予算額（円）</label>
+          <input type="number" data-budget-idx="${i}" value="${total != null ? total : ''}" placeholder="500000">
+          <button data-budget-set-idx="${i}">設定/更新</button>
+        </div>
+      </div>
+      <details class="budget-cat-records">
+        <summary>作業履歴を見る（${recordsForCat.length}件）</summary>
+        ${recordRowsHtml}
+      </details>`;
+  }).join('');
+
+  wrap.querySelectorAll('button[data-budget-set-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = budgetCategories[Number(btn.dataset.budgetSetIdx)];
+      const input = wrap.querySelector(`input[data-budget-idx="${btn.dataset.budgetSetIdx}"]`);
+      const amount = input.value;
+      if (amount === '') { alert('予算額を入力してください'); return; }
+      ensureBudgetsShape(gs);
+      if (!gs.budgets[gs.selectedYear]) gs.budgets[gs.selectedYear] = {};
+      gs.budgets[gs.selectedYear][cat] = Number(amount);
+      save();
+      renderBudgetCard(gs);
+    });
+  });
+  wrap.querySelectorAll('button[data-cat-edit]').forEach(btn => {
+    btn.addEventListener('click', () => editRecord(gs, btn.dataset.catEdit));
+  });
 }
-
-document.getElementById('budgetCategorySelect').addEventListener('change', (e) => {
-  const gs = getGreen(currentId);
-  if (!gs) return;
-  gs.displayBudgetCategory = e.target.value;
-  save();
-  renderBudgetCard(gs);
-});
-
-document.getElementById('btnSetBudget').addEventListener('click', () => {
-  const gs = getGreen(currentId);
-  if (!gs) return;
-  const amount = document.getElementById('budgetAmount').value;
-  if (amount === '') { alert('予算額を入力してください'); return; }
-  ensureBudgetsShape(gs);
-  if (!gs.budgets[gs.selectedYear]) gs.budgets[gs.selectedYear] = {};
-  gs.budgets[gs.selectedYear][gs.displayBudgetCategory] = Number(amount);
-  save();
-  renderBudgetCard(gs);
-});
 
 // ---- Records ----
 document.getElementById('recPhoto').addEventListener('change', (e) => {
@@ -1804,7 +1857,74 @@ function editRecord(gs, recId) {
   document.getElementById('recDate').scrollIntoView({behavior:'smooth', block:'center'});
 }
 
+// A green space's own保全作業記録 doubles as its "回"（round）: 1 record = 1 round.
+// Pending rounds are labeled 今回/次回/n回目予定 (like tree work history); completed ones sink to the bottom.
+function roundItemsSummary(gs, r) {
+  const items = r.items || [];
+  if (!items.length) return escapeHtml(r.type || '-');
+  return items.map(it => {
+    const t = it.subType ? `${it.type}(${it.subType})` : it.type;
+    const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
+    let treeNames = '';
+    if (it.workRefs && it.workRefs.length) {
+      const names = it.workRefs.map(ref => {
+        const tree = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+        return tree ? tree.label : null;
+      }).filter(Boolean);
+      if (names.length) treeNames = `[${names.join('・')}]`;
+    }
+    return escapeHtml(t + (q ? ' ' + q : '') + (treeNames ? ' ' + treeNames : ''));
+  }).join('、');
+}
+function sortRoundsForDisplay(records) {
+  const sorted = records.slice().sort((a, b) => {
+    const aDone = a.status === FINAL_STATUS, bDone = b.status === FINAL_STATUS;
+    if (aDone !== bDone) return aDone ? 1 : -1;
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+  let pendingSeq = 0;
+  return sorted.map(r => {
+    if (r.status === FINAL_STATUS) return { ...r, seqLabel: '', seqClass: '' };
+    pendingSeq++;
+    const seqLabel = pendingSeq === 1 ? '今回' : (pendingSeq === 2 ? '次回' : `${pendingSeq}回目予定`);
+    const seqClass = pendingSeq === 1 ? 'current' : (pendingSeq === 2 ? 'next' : 'later');
+    return { ...r, seqLabel, seqClass };
+  });
+}
+function renderRoundTable(gs) {
+  const wrap = document.getElementById('roundTableWrap');
+  document.getElementById('roundYearLabel').textContent = gs.selectedYear;
+  const records = gs.records.filter(r => String(r.year) === String(gs.selectedYear));
+  if (records.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">この年度の作業記録はまだありません</div>';
+    return;
+  }
+  const rounds = sortRoundsForDisplay(records);
+  wrap.innerHTML = `<table><tr><th></th><th>実施日</th><th>内容</th><th>状態</th><th></th></tr>` +
+    rounds.map(r => `
+      <tr class="${r.id === selectedRoundId ? 'row-complete' : ''}">
+        <td>${r.seqLabel ? `<span class="seq-badge ${r.seqClass}">${r.seqLabel}</span>` : ''}</td>
+        <td>${escapeHtml(r.date || '-')}</td>
+        <td>${roundItemsSummary(gs, r)}</td>
+        <td>${escapeHtml(r.status || '-')}</td>
+        <td><button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を地図で見る'}</button></td>
+      </tr>
+    `).join('') + `</table>`;
+
+  wrap.querySelectorAll('button[data-round]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedRoundId = (selectedRoundId === btn.dataset.round) ? null : btn.dataset.round;
+      renderRoundTable(gs);
+      renderPdfPins(gs);
+    });
+  });
+}
+
 function renderRecordTable(gs) {
+  renderRoundTable(gs);
   const wrap = document.getElementById('recordTableWrap');
   const showAll = document.getElementById('showAllYears').checked;
   const filtered = showAll ? gs.records : gs.records.filter(r => String(r.year) === String(gs.selectedYear));
@@ -1880,7 +2000,7 @@ function renderRecordTable(gs) {
   wrap.querySelectorAll('select.status-select').forEach(sel => {
     sel.addEventListener('change', () => {
       const r = gs.records.find(x => x.id === sel.dataset.id);
-      if (r) { r.status = sel.value; save(); renderGreenList(); }
+      if (r) { r.status = sel.value; save(); renderGreenList(); renderRoundTable(gs); }
     });
   });
   wrap.querySelectorAll('button[data-edit]').forEach(btn => {
@@ -1889,11 +2009,12 @@ function renderRecordTable(gs) {
   wrap.querySelectorAll('button[data-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!confirm('この記録を削除しますか？')) return;
+      if (selectedRoundId === btn.dataset.del) selectedRoundId = null;
       releaseTreeMarkers(gs, btn.dataset.del);
       gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
       save();
       renderBudgetCard(gs); renderRecordTable(gs); renderGreenList(); renderEnvTaxBox();
-      renderTreeMarkerList(gs); renderTreeMarkers();
+      renderTreeMarkerList(gs); renderTreeMarkers(); renderPdfPins(gs);
     });
   });
 }
@@ -1996,7 +2117,29 @@ function renderPdfSection(gs) {
 
 function renderPdfPins(gs) {
   const layer = document.getElementById('pdfPinLayer');
+  const banner = document.getElementById('roundFilterBanner');
   layer.innerHTML = '';
+
+  // When a round (=保全作業記録) is selected in the table above, isolate its trees on the
+  // site plan by hiding every other tree marker. Memo pins aren't round-specific, so they stay.
+  let allowedTreeIds = null;
+  const round = selectedRoundId ? gs.records.find(r => r.id === selectedRoundId) : null;
+  if (round) {
+    allowedTreeIds = new Set();
+    (round.items || []).forEach(it => (it.workRefs || []).forEach(ref => allowedTreeIds.add(ref.treeId)));
+    banner.style.display = 'block';
+    banner.innerHTML = `🗂️ 「${escapeHtml(round.date || '-')}」の回だけ表示中（対象の木: ${allowedTreeIds.size}件）　`
+      + `<button class="secondary" id="btnClearRoundFilter">すべて表示に戻す</button>`;
+    document.getElementById('btnClearRoundFilter').addEventListener('click', () => {
+      selectedRoundId = null;
+      renderRoundTable(gs);
+      renderPdfPins(gs);
+    });
+  } else {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+  }
+
   (gs.pdfPins || []).forEach(p => {
     const pin = document.createElement('div');
     pin.className = 'pdf-pin' + (p.label.includes('伐採') ? ' tree' : (p.label.includes('剪定') ? ' prune' : ''));
@@ -2013,16 +2156,18 @@ function renderPdfPins(gs) {
     layer.appendChild(label);
   });
   // Tree markers plotted directly on this site plan (x/y are % positions on the canvas)
-  (gs.treeMarkers || []).filter(t => t.x != null && t.y != null).forEach(t => {
-    normalizeTreeMarker(t);
-    const icon = document.createElement('div');
-    icon.className = 'pdf-tree-icon';
-    icon.style.left = t.x + '%';
-    icon.style.top = t.y + '%';
-    icon.textContent = treeMarkerIconEmoji(t);
-    icon.title = `${t.label}（${treeWorksSummary(t)}）`;
-    layer.appendChild(icon);
-  });
+  (gs.treeMarkers || []).filter(t => t.x != null && t.y != null)
+    .filter(t => !allowedTreeIds || allowedTreeIds.has(t.id))
+    .forEach(t => {
+      normalizeTreeMarker(t);
+      const icon = document.createElement('div');
+      icon.className = 'pdf-tree-icon';
+      icon.style.left = t.x + '%';
+      icon.style.top = t.y + '%';
+      icon.textContent = treeMarkerIconEmoji(t);
+      icon.title = `${t.label}（${treeWorksSummary(t)}）`;
+      layer.appendChild(icon);
+    });
   renderPinList(gs);
 }
 
