@@ -455,6 +455,47 @@
   }
   .work-pick-item input[type="checkbox"] { width: auto; }
   .picked-count-line { font-size: 12px; margin-top: 4px; color: #333; }
+
+  /* ===== モバイル対応 ===== */
+  @media (max-width: 640px) {
+    header { padding: 8px 12px; }
+    header h1 { font-size: 14px; }
+    header .hint { display: none; }
+
+    .layout { flex-direction: column; height: auto; min-height: calc(100vh - 44px); }
+
+    #sidebar {
+      width: 100%;
+      height: 200px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #mainArea { height: calc(100vh - 44px - 200px); min-height: 300px; }
+    #map { height: 100%; }
+
+    #detail {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100% !important;
+      height: 100% !important;
+      border-left: none;
+      z-index: 1000;
+      padding: 12px;
+    }
+
+    .budget-card { flex-direction: column; }
+    .budget-card-side { margin-left: 0; margin-top: 8px; min-width: 0; align-items: flex-start; }
+    .budget-amounts { font-size: 18px; }
+
+    table { font-size: 10.5px; }
+    th, td { padding: 3px 4px; }
+
+    .row2, .row3 { flex-direction: column; gap: 4px; }
+
+    .close-btn { font-size: 22px; padding: 4px 12px; top: 8px; right: 8px; }
+  }
 </style>
 </head>
 <body>
