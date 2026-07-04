@@ -717,11 +717,12 @@
     <div class="field" id="itemQtyWrap"></div>
     <div class="field"><label>費用（円）</label><input type="number" id="itemCost" placeholder="80000"></div>
   </div>
+  <div class="field"><label>この項目の予算</label><select id="itemBudgetCategory"></select></div>
   <button id="btnAddItem" style="width:100%; margin-bottom:10px;">＋ 項目を追加</button>
   <div id="itemListWrap"></div>
 
   <details id="recDetailsMore">
-    <summary>詳細情報（進捗・担当・予算・写真）</summary>
+    <summary>詳細情報（進捗・担当・写真）</summary>
     <div class="row2">
       <div class="field">
         <label>進捗状況</label>
@@ -729,10 +730,7 @@
       </div>
       <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
     </div>
-    <div class="row2">
-      <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
-      <div class="field"><label>この作業で使う予算の種類</label><select id="recBudgetCategory"></select></div>
-    </div>
+    <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
     <div class="checkbox-field">
       <input type="checkbox" id="recEnvTax">
       <label for="recEnvTax">🌲 環境譲与税案件</label>
@@ -1250,6 +1248,7 @@ function renderItemQtyFields(typeVal) {
   const wrap = document.getElementById('itemQtyWrap');
   const gs = getGreen(currentId);
   itemCostAutoFilled = true;
+  renderBudgetCategorySelectInto('itemBudgetCategory');
   if (typeVal === '草刈り' || typeVal === '清掃') {
     wrap.innerHTML = `<label>面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
   } else if (typeVal === '剪定' || typeVal === '伐採') {
@@ -1328,7 +1327,7 @@ function renderBudgetCatTags() {
       renderBudgetCatTags();
       const gs = getGreen(currentId);
       if (gs) {
-        renderBudgetCategorySelectInto('recBudgetCategory');
+        renderBudgetCategorySelectInto('itemBudgetCategory');
         renderBudgetCard(gs);
       }
     });
@@ -1345,7 +1344,7 @@ document.getElementById('btnAddBudgetCat').addEventListener('click', () => {
   renderBudgetCatTags();
   const gs = getGreen(currentId);
   if (gs) {
-    renderBudgetCategorySelectInto('recBudgetCategory');
+    renderBudgetCategorySelectInto('itemBudgetCategory');
     renderBudgetCard(gs);
   }
 });
@@ -1608,23 +1607,42 @@ function ensureBudgetsShape(gs) {
   });
 }
 
+// Budget is assigned per work item (a single record can mix items across several budgets).
+// Older records only had a record-level budgetCategory, so items without their own one inherit it.
+function normalizeItemBudgets(r) {
+  (r.items || []).forEach(it => {
+    if (!it.budgetCategory) it.budgetCategory = r.budgetCategory || budgetCategories[0] || '通常予算';
+  });
+}
+// Summary of which budget(s) a record's items draw on, for columns that show one record per row.
+function recordBudgetSummary(r) {
+  normalizeItemBudgets(r);
+  const cats = Array.from(new Set((r.items || []).map(it => it.budgetCategory).filter(Boolean)));
+  return cats.length ? cats.join('・') : '-';
+}
+
 // Renders one card per budget category (all shown at once, no switching), each with its
 // own amount/progress and a collapsible list of just that category's work records.
-function budgetCatRecordRowHtml(gs, r) {
-  const items = r.items || [];
-  const itemsLabel = items.length
-    ? items.map(it => {
-        const t = it.subType ? `${it.type}(${it.subType})` : it.type;
-        const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
-        return escapeHtml(t + (q ? ' ' + q : ''));
-      }).join('、')
-    : escapeHtml(r.type || '-');
+// One row = one work item (not a whole record), since a single record's items can now be
+// split across several budgets. The edit button still opens the record that item belongs to.
+function budgetCatItemRowHtml(gs, r, item) {
+  const t = item.subType ? `${item.type}(${item.subType})` : item.type;
+  const q = item.qty != null ? `${item.qty}${item.unit || ''}` : '';
+  let treeNames = '';
+  if (item.workRefs && item.workRefs.length) {
+    const names = item.workRefs.map(ref => {
+      const tree = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+      return tree ? tree.label : null;
+    }).filter(Boolean);
+    if (names.length) treeNames = `[${names.join('・')}]`;
+  }
+  const itemLabel = escapeHtml(t + (q ? ' ' + q : '') + (treeNames ? ' ' + treeNames : ''));
   return `<div class="budget-cat-record-row">
     <span>${escapeHtml(r.date || '-')}</span>
-    <span>${itemsLabel}</span>
+    <span>${itemLabel}</span>
     ${r.envTax ? '<span class="env-tax-badge">🌲 環境譲与税</span>' : ''}
     <span class="status-badge">${escapeHtml(r.status || '-')}</span>
-    <span class="brow-cost">¥${Number(r.cost || 0).toLocaleString()}</span>
+    <span class="brow-cost">¥${Number(item.cost || 0).toLocaleString()}</span>
     <button class="outline" data-cat-edit="${r.id}">編集</button>
   </div>`;
 }
@@ -1642,10 +1660,15 @@ function renderBudgetCard(gs) {
 
   wrap.innerHTML = budgetCategories.map((cat, i) => {
     const total = budgetForYear[cat];
-    const recordsForCat = gs.records
-      .filter(r => String(r.year) === String(y) && (r.budgetCategory || budgetCategories[0]) === cat)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    const spent = recordsForCat.reduce((s, r) => s + Number(r.cost || 0), 0);
+    const entries = [];
+    gs.records.filter(r => String(r.year) === String(y)).forEach(r => {
+      normalizeItemBudgets(r);
+      (r.items || []).forEach(item => {
+        if (item.budgetCategory === cat) entries.push({ r, item });
+      });
+    });
+    entries.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || ''));
+    const spent = entries.reduce((s, e) => s + Number(e.item.cost || 0), 0);
 
     let bodyHtml;
     if (total == null) {
@@ -1664,9 +1687,9 @@ function renderBudgetCard(gs) {
         <div class="budget-remain${remain < 0 ? ' over' : ''}">残額: ¥${remain.toLocaleString()}${remain < 0 ? '（予算超過）' : ''}</div>`;
     }
 
-    const recordRowsHtml = recordsForCat.length
-      ? recordsForCat.map(r => budgetCatRecordRowHtml(gs, r)).join('')
-      : '<div class="empty-msg">この予算の作業記録はまだありません</div>';
+    const recordRowsHtml = entries.length
+      ? entries.map(e => budgetCatItemRowHtml(gs, e.r, e.item)).join('')
+      : '<div class="empty-msg">この予算の作業項目はまだありません</div>';
 
     return `
       <div class="budget-card">
@@ -1681,7 +1704,7 @@ function renderBudgetCard(gs) {
         </div>
       </div>
       <details class="budget-cat-records">
-        <summary>作業履歴を見る（${recordsForCat.length}件）</summary>
+        <summary>作業項目を見る（${entries.length}件）</summary>
         ${recordRowsHtml}
       </details>`;
   }).join('');
@@ -1729,11 +1752,11 @@ function renderItemListWrap() {
     wrap.innerHTML = '<div class="empty-msg">作業項目がまだありません</div>';
     return;
   }
-  let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th></th></tr>';
+  let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th>予算</th><th></th></tr>';
   currentItems.forEach((it, idx) => {
     const typeLabel = it.subType ? `${escapeHtml(it.type)}（${escapeHtml(it.subType)}）` : escapeHtml(it.type);
     const qtyLabel = it.qty != null ? `${it.qty}${escapeHtml(it.unit || '')}` : (it.unit ? escapeHtml(it.unit) : '-');
-    html += `<tr><td>${typeLabel}</td><td>${qtyLabel}</td><td>¥${Number(it.cost).toLocaleString()}</td>
+    html += `<tr><td>${typeLabel}</td><td>${qtyLabel}</td><td>¥${Number(it.cost).toLocaleString()}</td><td>${escapeHtml(it.budgetCategory || '-')}</td>
       <td><button class="danger" data-rm-item="${idx}">削除</button></td></tr>`;
   });
   const total = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
@@ -1765,6 +1788,7 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
     });
     if (workRefs.length === 0) { alert('対象の木を1本以上選んでください'); return; }
   } else unit = unitEl ? unitEl.value.trim() : '';
+  const budgetCategory = document.getElementById('itemBudgetCategory').value;
   currentItems.push({
     id: uid(),
     type,
@@ -1772,6 +1796,7 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
     qty: qtyEl && qtyEl.value !== '' ? Number(qtyEl.value) : null,
     unit,
     cost: Number(cost),
+    budgetCategory,
     workRefs
   });
   renderItemListWrap();
@@ -1799,7 +1824,7 @@ function resetRecordForm() {
   renderOptionsInto('recContractor', contractorList);
   renderItemListWrap();
   const gs = getGreen(currentId);
-  renderBudgetCategorySelectInto('recBudgetCategory', gs ? gs.displayBudgetCategory : null);
+  renderBudgetCategorySelectInto('itemBudgetCategory', gs ? gs.displayBudgetCategory : null);
 }
 
 document.getElementById('btnCancelEdit').addEventListener('click', () => {
@@ -1828,7 +1853,6 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   const status = document.getElementById('recStatus').value;
   const inputBy = document.getElementById('recInputBy').value;
   const contractor = document.getElementById('recContractor').value;
-  const budgetCategory = document.getElementById('recBudgetCategory').value;
   const envTax = document.getElementById('recEnvTax').checked;
   const photoImg = document.getElementById('recPhotoPreview');
   const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
@@ -1838,6 +1862,8 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
     return;
   }
   const cost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
+  // Budget is set per item now; this is just a legacy "primary" tag for old code paths/backward compat.
+  const budgetCategory = currentItems[0] ? currentItems[0].budgetCategory : (budgetCategories[0] || '通常予算');
 
   let recordId;
   if (editingRecordId) {
@@ -1888,6 +1914,7 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
 function editRecord(gs, recId) {
   const r = gs.records.find(x => x.id === recId);
   if (!r) return;
+  normalizeItemBudgets(r);
   // Temporarily free this record's tree-marker claims while editing (cancel restores them; save re-claims).
   releaseTreeMarkers(gs, recId);
   editingRecordId = recId;
@@ -1905,7 +1932,7 @@ function editRecord(gs, recId) {
   renderRecStatusSelect(); document.getElementById('recStatus').value = r.status || statuses[0];
   renderOptionsInto('recInputBy', peopleList, r.inputBy);
   renderOptionsInto('recContractor', contractorList, r.contractor);
-  renderBudgetCategorySelectInto('recBudgetCategory', r.budgetCategory);
+  renderBudgetCategorySelectInto('itemBudgetCategory', (r.items && r.items.length) ? r.items[r.items.length - 1].budgetCategory : r.budgetCategory);
   document.getElementById('recEnvTax').checked = !!r.envTax;
   updateRecEnvTaxInfo();
   currentItems = (r.items || []).map(it => ({ ...it }));
@@ -1971,7 +1998,7 @@ function renderRoundTable(gs) {
         <td>${escapeHtml(r.date || '-')}</td>
         <td>${roundItemsSummary(gs, r)}</td>
         <td>¥${Number(r.cost || 0).toLocaleString()}</td>
-        <td>${escapeHtml(r.budgetCategory || '-')}${r.envTax ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
+        <td>${escapeHtml(recordBudgetSummary(r))}${r.envTax ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
         <td>${escapeHtml(r.status || '-')}</td>
         <td><button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を地図で見る'}</button></td>
       </tr>
@@ -2032,7 +2059,7 @@ function renderRecordTable(gs) {
       const isComplete = r.status === FINAL_STATUS;
       html += `<tr class="${isComplete ? 'row-complete' : ''}">
         <td>${itemsLabel}</td>
-        <td>${escapeHtml(r.budgetCategory || '-')}</td>
+        <td>${escapeHtml(recordBudgetSummary(r))}</td>
         <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
         <td>
           <select class="status-select" data-id="${r.id}">
@@ -2398,12 +2425,13 @@ function renderSummary() {
 
     ensureBudgetsShape(gs);
     const budgetForYear = gs.budgets[y] || {};
-    let totalBudget = 0, totalSpent = 0;
+    let totalBudget = 0;
     budgetCategories.forEach(cat => {
       const t = budgetForYear[cat];
       if (t != null) totalBudget += Number(t);
-      totalSpent += records.filter(r => (r.budgetCategory || budgetCategories[0]) === cat).reduce((s, r) => s + Number(r.cost || 0), 0);
     });
+    // Aggregate across every budget, so this stays correct regardless of how a record's items are split.
+    const totalSpent = records.reduce((s, r) => s + Number(r.cost || 0), 0);
     const pct = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : (totalSpent > 0 ? 100 : 0);
     const envSpent = records.filter(r => r.envTax).reduce((s, r) => s + Number(r.cost || 0), 0);
     const pendingTreeCount = (gs.treeMarkers || []).reduce((s, t) => s + (t.works || []).filter(w => !w.done).length, 0);
