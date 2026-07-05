@@ -221,6 +221,74 @@
     white-space: nowrap;
     pointer-events: none;
   }
+  .mow-area-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  .mow-area-svg polygon {
+    fill: rgba(139,195,74,0.35);
+    stroke: #558b2f;
+    stroke-width: 0.6;
+  }
+  .mow-area-svg polygon.done {
+    fill: rgba(158,158,158,0.25);
+    stroke: #9e9e9e;
+  }
+  .mow-area-svg polygon.draft {
+    fill: rgba(255,193,7,0.25);
+    stroke: #ff8f00;
+    stroke-dasharray: 2 1.2;
+  }
+  .mow-area-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: rgba(85,139,47,0.9);
+    color: white;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .mow-alert-bar {
+    background: #fff8e1;
+    border: 1px solid #ffb300;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #6d4c00;
+  }
+  .mow-alert-bar .mow-alert-green {
+    display: inline-block;
+    background: #ffe082;
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin: 2px 4px 2px 0;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .mow-alert-bar .mow-alert-green:hover { background: #ffd54f; }
+  .mow-check-box {
+    background: #f1f8e9;
+    border: 1px solid #aed581;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .mow-check-box .checkbox-field { margin-bottom: 4px; }
+  .mow-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    background: #ffb300;
+    color: #4a3200;
+  }
   .leaflet-tooltip.green-name-label {
     background: rgba(255,255,255,0.92);
     border: 1px solid var(--green);
@@ -561,6 +629,7 @@
 
 <div class="layout">
   <div id="sidebar">
+    <div id="mowAlertWrap"></div>
     <div class="panel-section">
       <h2>🌲 環境譲与税 予算（全緑地合計）</h2>
       <div class="field">
@@ -669,6 +738,21 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
+  <h3>🌿 草刈りチェック（<span id="mowCheckYearLabel">-</span>年度）</h3>
+  <div class="mow-check-box">
+    <div class="checkbox-field">
+      <input type="checkbox" id="mowCheckEarly">
+      <label for="mowCheckEarly">夏前（5〜6月）の草刈り 完了</label>
+    </div>
+    <div class="checkbox-field">
+      <input type="checkbox" id="mowCheckAutumn">
+      <label for="mowCheckAutumn">秋（9〜10月）の草刈り 完了</label>
+    </div>
+    <small class="help">5〜6月・9〜10月になると、未完了の緑地に自動でアラートが出ます。完了したらチェックしてください。</small>
+  </div>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
   <h3>🗂️ 作業回ごとの管理（<span id="roundYearLabel">-</span>年度）</h3>
   <small class="help">保全作業記録を「回」として一覧表示します。行の「この回を地図で見る」を押すと、下の敷地図にその回の対象（伐採・剪定予定の木）だけが表示されます。</small>
   <div id="roundTableWrap" style="margin-top:8px;"></div>
@@ -692,7 +776,13 @@
         <button class="outline" id="btnPdfTreeFell" style="width:100%;">🪓 配置図クリックで伐採予定の木を追加</button>
         <button class="outline" id="btnPdfTreePrune" style="width:100%;">✂️ 配置図クリックで剪定予定の木を追加</button>
       </div>
+      <button class="outline" id="btnMowDraw" style="width:100%; margin-top:8px;">🌿 配置図クリックで草刈りエリアを描く</button>
+      <div class="row2" id="mowDrawActions" style="display:none; margin-top:8px;">
+        <button id="btnMowConfirm" style="width:100%;">✅ このエリアで確定</button>
+        <button class="secondary" id="btnMowCancel" style="width:100%;">キャンセル</button>
+      </div>
       <button class="outline" id="btnPinAddMode" style="width:100%; margin-top:8px;">📍 クリックで通常のメモピンを追加</button>
+      <div id="mowAreaList" style="margin-top:8px;"></div>
       <div id="pinList" style="margin-top:8px;"></div>
     </div>
   </div>
@@ -718,6 +808,11 @@
     <div class="field"><label>費用（円）</label><input type="number" id="itemCost" placeholder="80000"></div>
   </div>
   <div class="field"><label>この項目の予算</label><select id="itemBudgetCategory"></select></div>
+  <div class="checkbox-field">
+    <input type="checkbox" id="itemEnvTax">
+    <label for="itemEnvTax">🌲 この項目は環境譲与税対象</label>
+    <span id="itemEnvTaxInfo" style="margin-left:auto; font-size:12px; color:#1b5e20; display:none;"></span>
+  </div>
   <button id="btnAddItem" style="width:100%; margin-bottom:10px;">＋ 項目を追加</button>
   <div id="itemListWrap"></div>
 
@@ -731,11 +826,6 @@
       <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
     </div>
     <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
-    <div class="checkbox-field">
-      <input type="checkbox" id="recEnvTax">
-      <label for="recEnvTax">🌲 環境譲与税案件</label>
-      <span id="recEnvTaxInfo" style="margin-left:auto; font-size:12px; color:#1b5e20; display:none;"></span>
-    </div>
     <div class="field">
       <label>作業前の写真</label>
       <input type="file" id="recPhoto" accept="image/*">
@@ -820,6 +910,8 @@ let pinAddMode = false;
 let hasAutoZoomed = false; // only force a zoom-in the first time any green space is opened
 let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree marker directly on the site-plan canvas
 let selectedRoundId = null; // record id whose site-plan trees are being isolated in the "作業回ごとの管理" table
+let mowDrawMode = false;    // clicking the site plan adds vertices of a new 草刈りエリア polygon
+let mowDraftPoints = [];    // vertices (%) of the polygon being drawn
 let markers = {};
 let treeMarkers = {};
 
@@ -866,7 +958,7 @@ map.on('click', (e) => {
     lat: e.latlng.lat, lng: e.latlng.lng,
     memo: '', budgets: {}, records: [],
     pdf: null, pdfName: null, pdfPins: [],
-    treeMarkers: [],
+    treeMarkers: [], mowAreas: [], mowChecks: {},
     years: [thisYear], selectedYear: thisYear,
     displayBudgetCategory: budgetCategories[0] || '通常予算'
   };
@@ -1007,6 +1099,9 @@ function renderTreeMarkerList(gs) {
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
             <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
             <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="見積額（円）" style="width:110px;">
+            <select data-work-budget="${t.id}|${w.id}">
+              ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(w.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
+            </select>
             <label class="work-done-check"><input type="checkbox" data-work-done="${t.id}|${w.id}" ${w.done ? 'checked' : ''}>対応済み</label>
             <input type="text" data-work-note="${t.id}|${w.id}" value="${escapeHtml(w.note || '')}" placeholder="メモ（状況など）">
             ${w.consumedBy ? '<span class="env-tax-badge">記録済み</span>' : ''}
@@ -1048,7 +1143,7 @@ function renderTreeMarkerList(gs) {
       const [treeId, workId] = inp.dataset.workDate.split('|');
       const t = gs.treeMarkers.find(x => x.id === treeId);
       const w = t && t.works.find(x => x.id === workId);
-      if (w) { w.date = inp.value; save(); renderTreeMarkers(); }
+      if (w) { w.date = inp.value; save(); renderTreeMarkers(); renderBudgetCard(gs); }
     });
   });
   wrap.querySelectorAll('input[data-work-amount]').forEach(inp => {
@@ -1056,7 +1151,15 @@ function renderTreeMarkerList(gs) {
       const [treeId, workId] = inp.dataset.workAmount.split('|');
       const t = gs.treeMarkers.find(x => x.id === treeId);
       const w = t && t.works.find(x => x.id === workId);
-      if (w) { w.amount = inp.value === '' ? null : Number(inp.value); save(); renderPdfPins(gs); }
+      if (w) { w.amount = inp.value === '' ? null : Number(inp.value); save(); renderPdfPins(gs); renderBudgetCard(gs); }
+    });
+  });
+  wrap.querySelectorAll('select[data-work-budget]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const [treeId, workId] = sel.dataset.workBudget.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (w) { w.budgetCategory = sel.value; save(); renderBudgetCard(gs); }
     });
   });
   wrap.querySelectorAll('input[data-work-note]').forEach(inp => {
@@ -1079,6 +1182,7 @@ function renderTreeMarkerList(gs) {
         renderTreeMarkers();
         renderPdfPins(gs);
         renderTreeMarkerList(gs);
+        renderBudgetCard(gs);
       }
     });
   });
@@ -1088,11 +1192,12 @@ function renderTreeMarkerList(gs) {
       const t = gs.treeMarkers.find(x => x.id === treeId);
       if (!t) return;
       if (!t.works) t.works = [];
-      t.works.push({ id: uid(), type, date: null, note: '', amount: null, done: false, consumedBy: null });
+      t.works.push({ id: uid(), type, date: null, note: '', amount: null, budgetCategory: budgetCategories[0] || null, done: false, consumedBy: null });
       save();
       renderTreeMarkers();
       renderPdfPins(gs);
       renderTreeMarkerList(gs);
+      renderBudgetCard(gs);
     });
   });
   wrap.querySelectorAll('button[data-del-work]').forEach(btn => {
@@ -1106,6 +1211,7 @@ function renderTreeMarkerList(gs) {
         renderTreeMarkers();
         renderPdfPins(gs);
         renderTreeMarkerList(gs);
+        renderBudgetCard(gs);
       }
     });
   });
@@ -1117,6 +1223,7 @@ function renderTreeMarkerList(gs) {
       renderTreeMarkers();
       renderPdfPins(gs);
       renderTreeMarkerList(gs);
+      renderBudgetCard(gs);
     });
   });
 }
@@ -1129,12 +1236,15 @@ function renderGreenList() {
     wrap.innerHTML = '<div class="empty-msg">まだ緑地が登録されていません。<br>地図クリックで追加してください。</div>';
     return;
   }
+  const season = currentMowSeason();
+  const seasonYear = new Date().getFullYear();
   data.forEach(gs => {
     const div = document.createElement('div');
     div.className = 'green-item' + (gs.id === currentId ? ' active' : '');
     const totalSpent = gs.records.reduce((s, r) => s + Number(r.cost || 0), 0);
     const latest = gs.records.slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''))[0];
-    div.innerHTML = `<div class="name">${escapeHtml(gs.name)} ${gs.pdf ? '📄' : ''}</div>
+    const mowAlert = season && !isMowDone(gs, season, seasonYear) ? ' <span class="mow-badge">🌿要草刈り</span>' : '';
+    div.innerHTML = `<div class="name">${escapeHtml(gs.name)} ${gs.pdf ? '📄' : ''}${mowAlert}</div>
       <div class="sub">記録数: ${gs.records.length}件 / 総支出: ¥${totalSpent.toLocaleString()}</div>
       ${latest ? `<div class="sub">最新: <span class="status-badge">${escapeHtml(latest.status||'-')}</span></div>` : ''}`;
     div.addEventListener('click', () => {
@@ -1205,7 +1315,7 @@ function collectPickableWorks(gs, type) {
     normalizeTreeMarker(t);
     (t.works || []).forEach(w => {
       if (w.type === type && !w.consumedBy) {
-        out.push({ treeId: t.id, treeLabel: t.label, workId: w.id, date: w.date, done: w.done, amount: w.amount });
+        out.push({ treeId: t.id, treeLabel: t.label, workId: w.id, date: w.date, done: w.done, amount: w.amount, budgetCategory: w.budgetCategory });
       }
     });
   });
@@ -1217,6 +1327,36 @@ function collectPickableWorks(gs, type) {
     return a.date.localeCompare(b.date);
   });
   return out;
+}
+
+// Mow areas not yet claimed by a record — pickable when adding a 草刈り work item.
+function collectAllPickableMowAreas(gs) {
+  ensureMowShape(gs);
+  return gs.mowAreas.filter(a => !a.consumedBy);
+}
+
+// 草刈り item: picking areas auto-fills 面積(sum of ㎡), 費用(sum of 見積額) and 予算 (when unanimous).
+function updatePickedMowAreas() {
+  const wrap = document.getElementById('itemQtyWrap');
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const checked = Array.from(wrap.querySelectorAll('input[data-pick-area]:checked'))
+    .map(cb => gs.mowAreas.find(a => a.id === cb.dataset.pickArea)).filter(Boolean);
+  const qtyEl = document.getElementById('itemQty');
+  if (qtyEl) {
+    const sqmSum = checked.reduce((s, a) => s + (a.sqm != null ? Number(a.sqm) : 0), 0);
+    if (sqmSum > 0) qtyEl.value = sqmSum;
+  }
+  const costEl = document.getElementById('itemCost');
+  if (costEl && itemCostAutoFilled) {
+    const amtSum = checked.reduce((s, a) => s + (a.amount != null ? Number(a.amount) : 0), 0);
+    costEl.value = amtSum > 0 ? amtSum : '';
+  }
+  const budgetEl = document.getElementById('itemBudgetCategory');
+  if (budgetEl && itemBudgetAutoFilled) {
+    const cats = new Set(checked.map(a => a.budgetCategory).filter(Boolean));
+    if (cats.size === 1) budgetEl.value = Array.from(cats)[0];
+  }
 }
 
 function updatePickedWorkCount() {
@@ -1242,14 +1382,44 @@ function updatePickedWorkCount() {
     }, 0);
     costEl.value = sum > 0 ? sum : '';
   }
+
+  // Likewise pre-fill the item's budget from the picked trees' own budget setting, when they all agree.
+  const budgetEl = document.getElementById('itemBudgetCategory');
+  if (budgetEl && gs && itemBudgetAutoFilled) {
+    const cats = new Set(checked.map(cb => {
+      const [treeId, workId] = cb.dataset.pickWork.split('|');
+      const t = gs.treeMarkers && gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works && t.works.find(x => x.id === workId);
+      return w && w.budgetCategory;
+    }).filter(Boolean));
+    if (cats.size === 1) budgetEl.value = Array.from(cats)[0];
+  }
 }
 
 function renderItemQtyFields(typeVal) {
   const wrap = document.getElementById('itemQtyWrap');
   const gs = getGreen(currentId);
   itemCostAutoFilled = true;
+  itemBudgetAutoFilled = true;
   renderBudgetCategorySelectInto('itemBudgetCategory');
-  if (typeVal === '草刈り' || typeVal === '清掃') {
+  if (typeVal === '草刈り' && gs && collectAllPickableMowAreas(gs).length) {
+    // Mow areas drawn on the site plan: pick which polygons this work covers.
+    const areas = collectAllPickableMowAreas(gs);
+    wrap.innerHTML = `<label>対象の草刈りエリアを選択</label>
+      <div class="work-pick-list">
+        ${areas.map(a => `
+          <label class="work-pick-item">
+            <input type="checkbox" data-pick-area="${a.id}" checked>
+            🌿 ${escapeHtml(a.label)} ${a.sqm != null ? `${a.sqm}㎡` : ''} ${a.amount != null ? `見積¥${Number(a.amount).toLocaleString()}` : ''} ${a.budgetCategory ? `[${escapeHtml(a.budgetCategory)}]` : ''}
+          </label>
+        `).join('')}
+      </div>
+      <label style="margin-top:6px;">面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
+    wrap.querySelectorAll('input[data-pick-area]').forEach(cb => {
+      cb.addEventListener('change', updatePickedMowAreas);
+    });
+    updatePickedMowAreas();
+  } else if (typeVal === '草刈り' || typeVal === '清掃') {
     wrap.innerHTML = `<label>面積（㎡）</label><input type="number" id="itemQty" placeholder="例: 100">`;
   } else if (typeVal === '剪定' || typeVal === '伐採') {
     const icon = typeVal === '剪定' ? '✂️' : '🪓';
@@ -1264,7 +1434,7 @@ function renderItemQtyFields(typeVal) {
           ? candidates.map(c => `
             <label class="work-pick-item">
               <input type="checkbox" data-pick-work="${c.treeId}|${c.workId}" ${!c.done ? 'checked' : ''}>
-              ${icon} ${escapeHtml(c.treeLabel)} ${c.date ? `(${escapeHtml(c.date)})` : '(日付未設定)'} ${c.amount != null ? `見積¥${Number(c.amount).toLocaleString()}` : ''} ${c.done ? '<span class="env-tax-badge">対応済み</span>' : ''}
+              ${icon} ${escapeHtml(c.treeLabel)} ${c.date ? `(${escapeHtml(c.date)})` : '(日付未設定)'} ${c.amount != null ? `見積¥${Number(c.amount).toLocaleString()}` : ''} ${c.budgetCategory ? `[${escapeHtml(c.budgetCategory)}]` : ''} ${c.done ? '<span class="env-tax-badge">対応済み</span>' : ''}
             </label>
           `).join('')
           : `<div class="empty-msg">対象の木が登録されていません（敷地図で先に木を登録してください）</div>`}
@@ -1422,8 +1592,11 @@ function renderEnvTaxBox() {
   const total = envTaxBudgets[envTaxSelectedYear];
   const used = data.reduce((sum, gs) => {
     return sum + gs.records
-      .filter(r => r.envTax && String(r.year) === String(envTaxSelectedYear))
-      .reduce((s, r) => s + Number(r.cost || 0), 0);
+      .filter(r => String(r.year) === String(envTaxSelectedYear))
+      .reduce((s, r) => {
+        normalizeItemBudgets(r);
+        return s + (r.items || []).filter(it => it.envTax).reduce((s2, it) => s2 + Number(it.cost || 0), 0);
+      }, 0);
   }, 0);
   document.getElementById('envTaxBudgetAmount').value = total != null ? total : '';
 
@@ -1463,10 +1636,10 @@ document.getElementById('btnSetEnvTaxBudget').addEventListener('click', () => {
   renderEnvTaxBox();
 });
 
-// Quick env-tax budget status shown only when the checkbox is checked (kept out of sight otherwise)
+// Quick env-tax budget status shown only when the item checkbox is checked (kept out of sight otherwise)
 function updateRecEnvTaxInfo() {
-  const infoEl = document.getElementById('recEnvTaxInfo');
-  const checked = document.getElementById('recEnvTax').checked;
+  const infoEl = document.getElementById('itemEnvTaxInfo');
+  const checked = document.getElementById('itemEnvTax').checked;
   if (!checked) {
     infoEl.style.display = 'none';
     return;
@@ -1476,10 +1649,15 @@ function updateRecEnvTaxInfo() {
   const total = envTaxBudgets[year];
   const used = data.reduce((sum, g) => {
     return sum + g.records
-      .filter(r => r.envTax && String(r.year) === String(year) && r.id !== editingRecordId)
-      .reduce((s, r) => s + Number(r.cost || 0), 0);
+      .filter(r => String(r.year) === String(year) && r.id !== editingRecordId)
+      .reduce((s, r) => {
+        normalizeItemBudgets(r);
+        return s + (r.items || []).filter(it => it.envTax).reduce((s2, it) => s2 + Number(it.cost || 0), 0);
+      }, 0);
   }, 0);
-  const pendingCost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
+  // Already-added items in this in-progress record that are flagged, plus the item currently being built.
+  const pendingCost = currentItems.filter(it => it.envTax).reduce((s, i) => s + Number(i.cost || 0), 0)
+    + Number(document.getElementById('itemCost').value || 0);
   const usedWithPending = used + pendingCost;
   if (total == null) {
     infoEl.textContent = `${year}年度の環境譲与税予算は未設定`;
@@ -1489,7 +1667,7 @@ function updateRecEnvTaxInfo() {
   }
   infoEl.style.display = 'inline';
 }
-document.getElementById('recEnvTax').addEventListener('change', updateRecEnvTaxInfo);
+document.getElementById('itemEnvTax').addEventListener('change', updateRecEnvTaxInfo);
 
 // ---- Detail panel ----
 function getGreen(id) { return data.find(g => g.id === id); }
@@ -1506,6 +1684,7 @@ function ensureYears(gs) {
 
 function renderYearSelect(gs) {
   ensureYears(gs);
+  renderMowChecks(gs);
   const sel = document.getElementById('yearSelect');
   sel.innerHTML = gs.years.slice().sort((a, b) => b - a)
     .map(y => `<option value="${y}" ${y === gs.selectedYear ? 'selected' : ''}>${y}年度</option>`).join('');
@@ -1521,6 +1700,7 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
   selectedRoundId = null;
   document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
   document.getElementById('recordYearLabel').textContent = gs.selectedYear;
+  renderMowChecks(gs);
   renderBudgetCard(gs);
   renderRecordTable(gs);
   renderPdfPins(gs);
@@ -1607,11 +1787,13 @@ function ensureBudgetsShape(gs) {
   });
 }
 
-// Budget is assigned per work item (a single record can mix items across several budgets).
-// Older records only had a record-level budgetCategory, so items without their own one inherit it.
+// Budget (and 環境譲与税 eligibility) is assigned per work item, since a single record can mix
+// items across several budgets. Older records only had record-level budgetCategory/envTax, so
+// items without their own value inherit it.
 function normalizeItemBudgets(r) {
   (r.items || []).forEach(it => {
     if (!it.budgetCategory) it.budgetCategory = r.budgetCategory || budgetCategories[0] || '通常予算';
+    if (it.envTax === undefined) it.envTax = !!r.envTax;
   });
 }
 // Summary of which budget(s) a record's items draw on, for columns that show one record per row.
@@ -1619,6 +1801,65 @@ function recordBudgetSummary(r) {
   normalizeItemBudgets(r);
   const cats = Array.from(new Set((r.items || []).map(it => it.budgetCategory).filter(Boolean)));
   return cats.length ? cats.join('・') : '-';
+}
+// Whether any item in a record is 環境譲与税-eligible, for columns that show one record per row.
+function recordHasEnvTax(r) {
+  normalizeItemBudgets(r);
+  return (r.items || []).some(it => it.envTax);
+}
+
+// 剪定・伐採 plotted on the site plan are 保全作業 too: their 見積額 counts against the budget
+// as a 見積(planned) amount until a 保全作業記録 claims them (consumedBy) — then the record
+// item's cost takes over, so nothing is double-counted. Undated works are treated as belonging
+// to the year currently displayed, since they're pending plans.
+function collectPlannedTreeWorks(gs, cat, year) {
+  const out = [];
+  (gs.treeMarkers || []).forEach(t => {
+    normalizeTreeMarker(t);
+    (t.works || []).forEach(w => {
+      if (w.consumedBy || w.amount == null) return;
+      if ((w.budgetCategory || budgetCategories[0]) !== cat) return;
+      if (w.date && String(w.date).slice(0, 4) !== String(year)) return;
+      out.push({ tree: t, work: w });
+    });
+  });
+  return out;
+}
+
+// 草刈りエリア (polygons on the site plan). Same accounting rule as tree works: their 見積額
+// counts as planned budget usage until a 保全作業記録's 草刈り item claims them.
+function ensureMowShape(gs) {
+  if (!gs.mowAreas) gs.mowAreas = [];
+  if (!gs.mowChecks) gs.mowChecks = {};
+}
+function collectPlannedMowAreas(gs, cat) {
+  ensureMowShape(gs);
+  return gs.mowAreas.filter(a =>
+    !a.consumedBy && a.amount != null && (a.budgetCategory || budgetCategories[0]) === cat);
+}
+function releaseMowAreas(gs, recordId) {
+  ensureMowShape(gs);
+  gs.mowAreas.forEach(a => { if (a.consumedBy === recordId) a.consumedBy = null; });
+}
+function claimMowAreas(gs, areaRefs, recordId) {
+  ensureMowShape(gs);
+  (areaRefs || []).forEach(id => {
+    const a = gs.mowAreas.find(x => x.id === id);
+    if (a) a.consumedBy = recordId;
+  });
+}
+
+// 5〜6月 = 夏前('early'), 9〜10月 = 秋('autumn'), else no mowing season right now.
+function currentMowSeason() {
+  const m = new Date().getMonth() + 1;
+  if (m === 5 || m === 6) return 'early';
+  if (m === 9 || m === 10) return 'autumn';
+  return null;
+}
+function mowSeasonLabel(season) { return season === 'early' ? '夏前（5〜6月）' : '秋（9〜10月）'; }
+function isMowDone(gs, season, year) {
+  ensureMowShape(gs);
+  return !!(gs.mowChecks[year] && gs.mowChecks[year][season]);
 }
 
 // Renders one card per budget category (all shown at once, no switching), each with its
@@ -1640,7 +1881,7 @@ function budgetCatItemRowHtml(gs, r, item) {
   return `<div class="budget-cat-record-row">
     <span>${escapeHtml(r.date || '-')}</span>
     <span>${itemLabel}</span>
-    ${r.envTax ? '<span class="env-tax-badge">🌲 環境譲与税</span>' : ''}
+    ${item.envTax ? '<span class="env-tax-badge">🌲 環境譲与税</span>' : ''}
     <span class="status-badge">${escapeHtml(r.status || '-')}</span>
     <span class="brow-cost">¥${Number(item.cost || 0).toLocaleString()}</span>
     <button class="outline" data-cat-edit="${r.id}">編集</button>
@@ -1670,25 +1911,50 @@ function renderBudgetCard(gs) {
     entries.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || ''));
     const spent = entries.reduce((s, e) => s + Number(e.item.cost || 0), 0);
 
+    // Site-plan tree works (剪定・伐採) and 草刈りエリア not yet recorded: their 見積額 counts as planned usage.
+    const planned = collectPlannedTreeWorks(gs, cat, y);
+    const plannedMow = collectPlannedMowAreas(gs, cat);
+    const plannedSum = planned.reduce((s, p) => s + Number(p.work.amount || 0), 0)
+      + plannedMow.reduce((s, a) => s + Number(a.amount || 0), 0);
+    const combined = spent + plannedSum;
+    const breakdownHtml = plannedSum > 0
+      ? `<div class="budget-remain">内訳: 記録済み ¥${spent.toLocaleString()} ＋ 見積（未記録） ¥${plannedSum.toLocaleString()}</div>`
+      : '';
+
     let bodyHtml;
     if (total == null) {
       bodyHtml = `
-        <div class="budget-amounts"><span>¥${spent.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">未設定</span></div>
+        <div class="budget-amounts"><span>¥${combined.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">未設定</span></div>
         <div class="budget-progress-track"><div class="budget-progress-fill" style="width:0%; background:#ccc;"></div></div>
         <div class="budget-percent">この予算はまだ設定されていません</div>
-        <div class="budget-remain"></div>`;
+        ${breakdownHtml}`;
     } else {
-      const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
-      const remain = total - spent;
+      const pct = total > 0 ? Math.round((combined / total) * 100) : 0;
+      const remain = total - combined;
       bodyHtml = `
-        <div class="budget-amounts"><span>¥${spent.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">¥${Number(total).toLocaleString()}</span></div>
+        <div class="budget-amounts"><span>¥${combined.toLocaleString()}</span><span class="budget-slash">/</span><span class="budget-total">¥${Number(total).toLocaleString()}</span></div>
         <div class="budget-progress-track"><div class="budget-progress-fill" style="width:${Math.min(pct, 100)}%; background:${pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>
-        <div class="budget-percent">${pct}% 使用</div>
-        <div class="budget-remain${remain < 0 ? ' over' : ''}">残額: ¥${remain.toLocaleString()}${remain < 0 ? '（予算超過）' : ''}</div>`;
+        <div class="budget-percent">${pct}% 使用（見積含む）</div>
+        <div class="budget-remain${remain < 0 ? ' over' : ''}">残額: ¥${remain.toLocaleString()}${remain < 0 ? '（予算超過）' : ''}</div>
+        ${breakdownHtml}`;
     }
 
-    const recordRowsHtml = entries.length
-      ? entries.map(e => budgetCatItemRowHtml(gs, e.r, e.item)).join('')
+    const plannedRowsHtml = planned.map(p => `
+      <div class="budget-cat-record-row">
+        <span>${escapeHtml(p.work.date || '未定')}</span>
+        <span>${p.work.type === '剪定' ? '✂️' : '🪓'} ${escapeHtml(p.work.type)} [${escapeHtml(p.tree.label)}]</span>
+        <span class="status-badge">見積（未記録）</span>
+        <span class="brow-cost">¥${Number(p.work.amount).toLocaleString()}</span>
+      </div>`).join('')
+      + plannedMow.map(a => `
+      <div class="budget-cat-record-row">
+        <span>未定</span>
+        <span>🌿 草刈り [${escapeHtml(a.label)}]${a.sqm != null ? ` ${a.sqm}㎡` : ''}</span>
+        <span class="status-badge">見積（未記録）</span>
+        <span class="brow-cost">¥${Number(a.amount).toLocaleString()}</span>
+      </div>`).join('');
+    const recordRowsHtml = (entries.length || planned.length || plannedMow.length)
+      ? plannedRowsHtml + entries.map(e => budgetCatItemRowHtml(gs, e.r, e.item)).join('')
       : '<div class="empty-msg">この予算の作業項目はまだありません</div>';
 
     return `
@@ -1704,7 +1970,7 @@ function renderBudgetCard(gs) {
         </div>
       </div>
       <details class="budget-cat-records">
-        <summary>作業項目を見る（${entries.length}件）</summary>
+        <summary>作業項目を見る（${entries.length + planned.length + plannedMow.length}件）</summary>
         ${recordRowsHtml}
       </details>`;
   }).join('');
@@ -1744,6 +2010,8 @@ document.getElementById('recPhoto').addEventListener('change', (e) => {
 let currentItems = [];
 let itemCostAutoFilled = true; // false once the user types into 費用 by hand; stops the tree-estimate auto-sum from overwriting it
 document.getElementById('itemCost').addEventListener('input', () => { itemCostAutoFilled = false; });
+let itemBudgetAutoFilled = true; // false once the user picks 予算 by hand; stops the tree-side auto-fill from overwriting it
+document.getElementById('itemBudgetCategory').addEventListener('change', () => { itemBudgetAutoFilled = false; });
 
 function renderItemListWrap() {
   const wrap = document.getElementById('itemListWrap');
@@ -1752,11 +2020,11 @@ function renderItemListWrap() {
     wrap.innerHTML = '<div class="empty-msg">作業項目がまだありません</div>';
     return;
   }
-  let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th>予算</th><th></th></tr>';
+  let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th>予算</th><th>環境譲与税</th><th></th></tr>';
   currentItems.forEach((it, idx) => {
     const typeLabel = it.subType ? `${escapeHtml(it.type)}（${escapeHtml(it.subType)}）` : escapeHtml(it.type);
     const qtyLabel = it.qty != null ? `${it.qty}${escapeHtml(it.unit || '')}` : (it.unit ? escapeHtml(it.unit) : '-');
-    html += `<tr><td>${typeLabel}</td><td>${qtyLabel}</td><td>¥${Number(it.cost).toLocaleString()}</td><td>${escapeHtml(it.budgetCategory || '-')}</td>
+    html += `<tr><td>${typeLabel}</td><td>${qtyLabel}</td><td>¥${Number(it.cost).toLocaleString()}</td><td>${escapeHtml(it.budgetCategory || '-')}</td><td>${it.envTax ? '<span class="env-tax-badge">🌲</span>' : '-'}</td>
       <td><button class="danger" data-rm-item="${idx}">削除</button></td></tr>`;
   });
   const total = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
@@ -1779,7 +2047,12 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
   if (!type || cost === '') { alert('種別と費用は必須です'); return; }
   let unit = '';
   let workRefs = null;
-  if (type === '草刈り' || type === '清掃') unit = '㎡';
+  let areaRefs = null;
+  if (type === '草刈り' || type === '清掃') {
+    unit = '㎡';
+    const areaChecks = Array.from(document.querySelectorAll('input[data-pick-area]:checked'));
+    if (areaChecks.length) areaRefs = areaChecks.map(cb => cb.dataset.pickArea);
+  }
   else if (type === '伐採' || type === '剪定') {
     unit = '本';
     workRefs = Array.from(document.querySelectorAll('input[data-pick-work]:checked')).map(cb => {
@@ -1789,6 +2062,7 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
     if (workRefs.length === 0) { alert('対象の木を1本以上選んでください'); return; }
   } else unit = unitEl ? unitEl.value.trim() : '';
   const budgetCategory = document.getElementById('itemBudgetCategory').value;
+  const envTax = document.getElementById('itemEnvTax').checked;
   currentItems.push({
     id: uid(),
     type,
@@ -1797,10 +2071,14 @@ document.getElementById('btnAddItem').addEventListener('click', () => {
     unit,
     cost: Number(cost),
     budgetCategory,
-    workRefs
+    envTax,
+    workRefs,
+    areaRefs
   });
   renderItemListWrap();
   document.getElementById('itemCost').value = '';
+  document.getElementById('itemEnvTax').checked = false;
+  updateRecEnvTaxInfo();
   renderItemQtyFields(type);
 });
 
@@ -1811,8 +2089,8 @@ function resetRecordForm() {
   document.getElementById('btnAddRecord').textContent = '記録を追加';
   document.getElementById('btnCancelEdit').style.display = 'none';
   document.getElementById('recDate').value = '';
-  document.getElementById('recEnvTax').checked = false;
-  document.getElementById('recEnvTaxInfo').style.display = 'none';
+  document.getElementById('itemEnvTax').checked = false;
+  document.getElementById('itemEnvTaxInfo').style.display = 'none';
   document.getElementById('recPhoto').value = '';
   document.getElementById('recPhotoPreview').style.display = 'none';
   document.getElementById('recPhotoPreview').src = '';
@@ -1828,7 +2106,7 @@ function resetRecordForm() {
 }
 
 document.getElementById('btnCancelEdit').addEventListener('click', () => {
-  // Cancelling an edit restores the tree-marker claims this record originally had.
+  // Cancelling an edit restores the tree-marker / mow-area claims this record originally had.
   if (editingRecordId) {
     const gs = getGreen(currentId);
     const r = gs && gs.records.find(x => x.id === editingRecordId);
@@ -1837,10 +2115,15 @@ document.getElementById('btnCancelEdit').addEventListener('click', () => {
         if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
           consumeTreeMarkers(gs, item.type, item.qty, r.id);
         }
+        if (item.areaRefs && item.areaRefs.length) {
+          claimMowAreas(gs, item.areaRefs, r.id);
+        }
       });
       save();
       renderTreeMarkerList(gs);
       renderTreeMarkers();
+      renderPdfPins(gs);
+      renderBudgetCard(gs);
     }
   }
   resetRecordForm();
@@ -1853,7 +2136,6 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   const status = document.getElementById('recStatus').value;
   const inputBy = document.getElementById('recInputBy').value;
   const contractor = document.getElementById('recContractor').value;
-  const envTax = document.getElementById('recEnvTax').checked;
   const photoImg = document.getElementById('recPhotoPreview');
   const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
 
@@ -1862,8 +2144,9 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
     return;
   }
   const cost = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
-  // Budget is set per item now; this is just a legacy "primary" tag for old code paths/backward compat.
+  // Budget and 環境譲与税 are set per item now; these are just legacy "primary" tags for old code paths.
   const budgetCategory = currentItems[0] ? currentItems[0].budgetCategory : (budgetCategories[0] || '通常予算');
+  const envTax = currentItems.some(it => it.envTax);
 
   let recordId;
   if (editingRecordId) {
@@ -1884,7 +2167,8 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
       items: currentItems.slice(), cost, photo
     });
   }
-  // Claim the map-plotted trees this record's items draw on (editing already released its old claims above).
+  // Claim the map-plotted trees / mow areas this record's items draw on
+  // (editing already released its old claims above).
   if (recordId) {
     currentItems.forEach(item => {
       if ((item.type === '伐採' || item.type === '剪定') && item.workRefs && item.workRefs.length) {
@@ -1899,6 +2183,9 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
           }
         });
       }
+      if (item.areaRefs && item.areaRefs.length) {
+        claimMowAreas(gs, item.areaRefs, recordId);
+      }
     });
   }
   save();
@@ -1909,14 +2196,16 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   renderEnvTaxBox();
   renderTreeMarkerList(gs);
   renderTreeMarkers();
+  renderPdfPins(gs);
 });
 
 function editRecord(gs, recId) {
   const r = gs.records.find(x => x.id === recId);
   if (!r) return;
   normalizeItemBudgets(r);
-  // Temporarily free this record's tree-marker claims while editing (cancel restores them; save re-claims).
+  // Temporarily free this record's tree-marker / mow-area claims while editing (cancel restores them; save re-claims).
   releaseTreeMarkers(gs, recId);
+  releaseMowAreas(gs, recId);
   editingRecordId = recId;
   if (!gs.years.includes(r.year)) { gs.years.push(r.year); }
   gs.selectedYear = r.year;
@@ -1933,7 +2222,7 @@ function editRecord(gs, recId) {
   renderOptionsInto('recInputBy', peopleList, r.inputBy);
   renderOptionsInto('recContractor', contractorList, r.contractor);
   renderBudgetCategorySelectInto('itemBudgetCategory', (r.items && r.items.length) ? r.items[r.items.length - 1].budgetCategory : r.budgetCategory);
-  document.getElementById('recEnvTax').checked = !!r.envTax;
+  document.getElementById('itemEnvTax').checked = false;
   updateRecEnvTaxInfo();
   currentItems = (r.items || []).map(it => ({ ...it }));
   renderItemListWrap();
@@ -1953,15 +2242,22 @@ function roundItemsSummary(gs, r) {
   return items.map(it => {
     const t = it.subType ? `${it.type}(${it.subType})` : it.type;
     const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
-    let treeNames = '';
+    let targetNames = '';
     if (it.workRefs && it.workRefs.length) {
       const names = it.workRefs.map(ref => {
         const tree = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
         return tree ? tree.label : null;
       }).filter(Boolean);
-      if (names.length) treeNames = `[${names.join('・')}]`;
+      if (names.length) targetNames = `[${names.join('・')}]`;
     }
-    return escapeHtml(t + (q ? ' ' + q : '') + (treeNames ? ' ' + treeNames : ''));
+    if (it.areaRefs && it.areaRefs.length) {
+      const names = it.areaRefs.map(id => {
+        const a = (gs.mowAreas || []).find(x => x.id === id);
+        return a ? a.label : null;
+      }).filter(Boolean);
+      if (names.length) targetNames += `[${names.join('・')}]`;
+    }
+    return escapeHtml(t + (q ? ' ' + q : '') + (targetNames ? ' ' + targetNames : ''));
   }).join('、');
 }
 function sortRoundsForDisplay(records) {
@@ -1998,9 +2294,12 @@ function renderRoundTable(gs) {
         <td>${escapeHtml(r.date || '-')}</td>
         <td>${roundItemsSummary(gs, r)}</td>
         <td>¥${Number(r.cost || 0).toLocaleString()}</td>
-        <td>${escapeHtml(recordBudgetSummary(r))}${r.envTax ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
+        <td>${escapeHtml(recordBudgetSummary(r))}${recordHasEnvTax(r) ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
         <td>${escapeHtml(r.status || '-')}</td>
-        <td><button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を地図で見る'}</button></td>
+        <td>
+          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を地図で見る'}</button>
+          <button class="outline" data-round-doc="${r.id}">📄 Word</button>
+        </td>
       </tr>
     `).join('') + `</table>`;
 
@@ -2011,6 +2310,160 @@ function renderRoundTable(gs) {
       renderPdfPins(gs);
     });
   });
+  wrap.querySelectorAll('button[data-round-doc]').forEach(btn => {
+    btn.addEventListener('click', () => exportRoundDoc(gs, btn.dataset.roundDoc));
+  });
+}
+
+// ---- Word文書出力（作業回ごと）: 敷地図に番号を焼き込んだ画像 + 対象木・草刈りエリアの詳細表 ----
+function drawDocBadge(ctx, x, y, text, color, canvasW) {
+  const r = Math.max(12, canvasW * 0.015);
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, r * 0.18);
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = `bold ${Math.round(r * 1.05)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+function buildAnnotatedPlanImage(gs, treeRefs, areas) {
+  const src = document.getElementById('pdfCanvas');
+  if (!gs.pdf || !src || !src.width) return null;
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0);
+  const px = p => ({ x: p.x / 100 * c.width, y: p.y / 100 * c.height });
+  areas.forEach((a, i) => {
+    if (!a.points || a.points.length < 3) return;
+    ctx.beginPath();
+    a.points.forEach((p, j) => { const q = px(p); j ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(139,195,74,0.35)';
+    ctx.fill();
+    ctx.strokeStyle = '#558b2f';
+    ctx.lineWidth = Math.max(2, c.width * 0.003);
+    ctx.stroke();
+    const cen = px(mowAreaCentroid(a.points));
+    drawDocBadge(ctx, cen.x, cen.y, 'A' + (i + 1), '#558b2f', c.width);
+  });
+  treeRefs.forEach((tr, i) => {
+    if (tr.tree.x == null || tr.tree.y == null) return;
+    const q = px(tr.tree);
+    drawDocBadge(ctx, q.x, q.y, String(i + 1), tr.work && tr.work.type === '剪定' ? '#1565c0' : '#c62828', c.width);
+  });
+  return c.toDataURL('image/png');
+}
+
+function exportRoundDoc(gs, recordId) {
+  const r = gs.records.find(x => x.id === recordId);
+  if (!r) return;
+  normalizeItemBudgets(r);
+  ensureMowShape(gs);
+
+  const treeRefs = [];
+  (r.items || []).forEach(it => (it.workRefs || []).forEach(ref => {
+    const t = (gs.treeMarkers || []).find(x => x.id === ref.treeId);
+    const w = t && (t.works || []).find(x => x.id === ref.workId);
+    if (t) treeRefs.push({ item: it, tree: t, work: w });
+  }));
+  const areaIds = new Set();
+  (r.items || []).forEach(it => (it.areaRefs || []).forEach(id => areaIds.add(id)));
+  const areas = (gs.mowAreas || []).filter(a => areaIds.has(a.id));
+
+  const planImg = buildAnnotatedPlanImage(gs, treeRefs, areas);
+
+  const e = escapeHtml;
+  const itemsRows = (r.items || []).map(it => {
+    const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '-';
+    const t = it.subType ? `${it.type}（${it.subType}）` : it.type;
+    return `<tr><td>${e(t)}</td><td>${e(q)}</td><td style="text-align:right;">¥${Number(it.cost || 0).toLocaleString()}</td><td>${e(it.budgetCategory || '-')}</td><td>${it.envTax ? '対象' : '-'}</td></tr>`;
+  }).join('');
+  const treeRows = treeRefs.map((tr, i) => `<tr>
+    <td style="text-align:center;">${i + 1}</td>
+    <td>${e(tr.tree.label)}</td>
+    <td>${e(tr.work ? tr.work.type : '-')}</td>
+    <td style="text-align:right;">${tr.tree.diameter != null ? tr.tree.diameter : '-'}</td>
+    <td style="text-align:right;">${tr.work && tr.work.amount != null ? '¥' + Number(tr.work.amount).toLocaleString() : '-'}</td>
+    <td>${e(tr.work && tr.work.budgetCategory || '-')}</td>
+    <td>${e(tr.work && tr.work.note || '')}</td>
+  </tr>`).join('');
+  const areaRows = areas.map((a, i) => `<tr>
+    <td style="text-align:center;">A${i + 1}</td>
+    <td>${e(a.label)}</td>
+    <td style="text-align:right;">${a.sqm != null ? a.sqm + '㎡' : '-'}</td>
+    <td style="text-align:right;">${a.amount != null ? '¥' + Number(a.amount).toLocaleString() : '-'}</td>
+    <td>${e(a.budgetCategory || '-')}</td>
+  </tr>`).join('');
+
+  const tableStyle = 'border-collapse:collapse; width:100%; font-size:10.5pt;';
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>作業内容書</title>
+<style>
+  body { font-family: "Yu Gothic", "MS Gothic", sans-serif; font-size: 11pt; }
+  h1 { font-size: 16pt; border-bottom: 2px solid #2e7d32; color: #1b5e20; padding-bottom: 4px; }
+  h2 { font-size: 13pt; color: #1b5e20; margin: 14pt 0 4pt; }
+  table, th, td { border: 1px solid #888; }
+  th { background: #e8f5e9; }
+  th, td { padding: 3pt 5pt; }
+</style></head>
+<body>
+<h1>🌳 緑地保全作業 内容書</h1>
+<table style="${tableStyle}">
+  <tr><th style="width:25%;">緑地名</th><td>${e(gs.name)}</td></tr>
+  <tr><th>年度</th><td>${e(r.year)}年度</td></tr>
+  <tr><th>実施日</th><td>${e(r.date || '未定')}</td></tr>
+  <tr><th>進捗状況</th><td>${e(r.status || '-')}</td></tr>
+  <tr><th>受注業者</th><td>${e(r.contractor || '-')}</td></tr>
+  <tr><th>入力者</th><td>${e(r.inputBy || '-')}</td></tr>
+  <tr><th>費用合計</th><td><b>¥${Number(r.cost || 0).toLocaleString()}</b></td></tr>
+</table>
+
+<h2>作業項目</h2>
+<table style="${tableStyle}">
+  <tr><th>種別</th><th>数量</th><th>費用</th><th>予算</th><th>環境譲与税</th></tr>
+  ${itemsRows || '<tr><td colspan="5">なし</td></tr>'}
+</table>
+
+${treeRows ? `<h2>対象の木（敷地図の番号に対応）</h2>
+<table style="${tableStyle}">
+  <tr><th>番号</th><th>名称</th><th>作業</th><th>樹径(cm)</th><th>見積額</th><th>予算</th><th>メモ</th></tr>
+  ${treeRows}
+</table>` : ''}
+
+${areaRows ? `<h2>草刈りエリア（敷地図のA番号に対応）</h2>
+<table style="${tableStyle}">
+  <tr><th>番号</th><th>エリア名</th><th>面積</th><th>見積額</th><th>予算</th></tr>
+  ${areaRows}
+</table>` : ''}
+
+${planImg ? `<h2>敷地図（対象箇所）</h2><img src="plan.png" width="620">` : '<p>※敷地図は未登録です</p>'}
+
+<p style="font-size:9pt; color:#666;">出力日: ${new Date().toLocaleDateString('ja-JP')} ／ 新座市 緑地管理システム</p>
+</body></html>`;
+
+  // Word が画像入りHTMLを確実に読み込めるよう、MHT（MIME HTML）形式で .doc を作る
+  const boundary = '----=_NextPart_niiza_ryokuchi';
+  let mht = `MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="${boundary}"\r\n\r\n`;
+  mht += `--${boundary}\r\nContent-Type: text/html; charset="utf-8"\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${html}\r\n\r\n`;
+  if (planImg) {
+    const b64 = planImg.split(',')[1].replace(/(.{76})/g, '$1\r\n');
+    mht += `--${boundary}\r\nContent-Location: plan.png\r\nContent-Transfer-Encoding: base64\r\nContent-Type: image/png\r\n\r\n${b64}\r\n\r\n`;
+  }
+  mht += `--${boundary}--`;
+
+  const blob = new Blob([mht], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${gs.name}_${r.date || '日付未定'}_作業内容書.doc`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function renderRecordTable(gs) {
@@ -2060,7 +2513,7 @@ function renderRecordTable(gs) {
       html += `<tr class="${isComplete ? 'row-complete' : ''}">
         <td>${itemsLabel}</td>
         <td>${escapeHtml(recordBudgetSummary(r))}</td>
-        <td>${r.envTax ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
+        <td>${recordHasEnvTax(r) ? '<span class="env-tax-badge">🌲 対象</span>' : '-'}</td>
         <td>
           <select class="status-select" data-id="${r.id}">
             ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s===r.status?'selected':''}>${escapeHtml(s)}</option>`).join('')}
@@ -2101,6 +2554,7 @@ function renderRecordTable(gs) {
       if (!confirm('この記録を削除しますか？')) return;
       if (selectedRoundId === btn.dataset.del) selectedRoundId = null;
       releaseTreeMarkers(gs, btn.dataset.del);
+      releaseMowAreas(gs, btn.dataset.del);
       gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
       save();
       renderBudgetCard(gs); renderRecordTable(gs); renderGreenList(); renderEnvTaxBox();
@@ -2205,20 +2659,34 @@ function renderPdfSection(gs) {
   });
 }
 
+function mowAreaCentroid(points) {
+  const n = points.length || 1;
+  return {
+    x: points.reduce((s, p) => s + p.x, 0) / n,
+    y: points.reduce((s, p) => s + p.y, 0) / n
+  };
+}
+
 function renderPdfPins(gs) {
   const layer = document.getElementById('pdfPinLayer');
   const banner = document.getElementById('roundFilterBanner');
   layer.innerHTML = '';
+  ensureMowShape(gs);
 
-  // When a round (=保全作業記録) is selected in the table above, isolate its trees on the
-  // site plan by hiding every other tree marker. Memo pins aren't round-specific, so they stay.
+  // When a round (=保全作業記録) is selected in the table above, isolate its trees and
+  // mow areas on the site plan by hiding everything else. Memo pins aren't round-specific.
   let allowedTreeIds = null;
+  let allowedAreaIds = null;
   const round = selectedRoundId ? gs.records.find(r => r.id === selectedRoundId) : null;
   if (round) {
     allowedTreeIds = new Set();
-    (round.items || []).forEach(it => (it.workRefs || []).forEach(ref => allowedTreeIds.add(ref.treeId)));
+    allowedAreaIds = new Set();
+    (round.items || []).forEach(it => {
+      (it.workRefs || []).forEach(ref => allowedTreeIds.add(ref.treeId));
+      (it.areaRefs || []).forEach(id => allowedAreaIds.add(id));
+    });
     banner.style.display = 'block';
-    banner.innerHTML = `🗂️ 「${escapeHtml(round.date || '-')}」の回だけ表示中（対象の木: ${allowedTreeIds.size}件）　`
+    banner.innerHTML = `🗂️ 「${escapeHtml(round.date || '-')}」の回だけ表示中（対象の木: ${allowedTreeIds.size}件 / 草刈りエリア: ${allowedAreaIds.size}件）　`
       + `<button class="secondary" id="btnClearRoundFilter">すべて表示に戻す</button>`;
     document.getElementById('btnClearRoundFilter').addEventListener('click', () => {
       selectedRoundId = null;
@@ -2228,6 +2696,37 @@ function renderPdfPins(gs) {
   } else {
     banner.style.display = 'none';
     banner.innerHTML = '';
+  }
+
+  // 草刈りエリア polygons (SVG stretched over the canvas; coordinates are % of canvas size)
+  const visibleAreas = gs.mowAreas.filter(a => !allowedAreaIds || allowedAreaIds.has(a.id));
+  if (visibleAreas.length || mowDraftPoints.length) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'mow-area-svg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    visibleAreas.forEach(a => {
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('points', a.points.map(p => `${p.x},${p.y}`).join(' '));
+      if (a.consumedBy) poly.setAttribute('class', 'done');
+      svg.appendChild(poly);
+    });
+    if (mowDraftPoints.length) {
+      const draft = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      draft.setAttribute('points', mowDraftPoints.map(p => `${p.x},${p.y}`).join(' '));
+      draft.setAttribute('class', 'draft');
+      svg.appendChild(draft);
+    }
+    layer.appendChild(svg);
+    visibleAreas.forEach(a => {
+      const c = mowAreaCentroid(a.points);
+      const lbl = document.createElement('div');
+      lbl.className = 'mow-area-label';
+      lbl.style.left = c.x + '%';
+      lbl.style.top = c.y + '%';
+      lbl.textContent = `🌿${a.label}${a.sqm ? ` ${a.sqm}㎡` : ''}${a.amount != null ? ` ¥${Number(a.amount).toLocaleString()}` : ''}${a.consumedBy ? '（記録済）' : ''}`;
+      layer.appendChild(lbl);
+    });
   }
 
   (gs.pdfPins || []).forEach(p => {
@@ -2269,6 +2768,55 @@ function renderPdfPins(gs) {
       }
     });
   renderPinList(gs);
+  renderMowAreaList(gs);
+}
+
+function renderMowAreaList(gs) {
+  const wrap = document.getElementById('mowAreaList');
+  ensureMowShape(gs);
+  if (gs.mowAreas.length === 0) {
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🌿 草刈りエリア</label>' + gs.mowAreas.map(a => `
+    <div class="pin-item">
+      <span>🌿 ${escapeHtml(a.label)}</span>
+      <input type="number" data-mow-sqm="${a.id}" value="${a.sqm != null ? a.sqm : ''}" placeholder="㎡" style="width:70px; font-size:12px; padding:2px 4px;">
+      <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="見積額" style="width:90px; font-size:12px; padding:2px 4px;">
+      <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
+        ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
+      </select>
+      ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : ''}
+      <button class="danger" data-mow-del="${a.id}">削除</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('input[data-mow-sqm]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === inp.dataset.mowSqm);
+      if (a) { a.sqm = inp.value === '' ? null : Number(inp.value); save(); renderPdfPins(gs); }
+    });
+  });
+  wrap.querySelectorAll('input[data-mow-amount]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === inp.dataset.mowAmount);
+      if (a) { a.amount = inp.value === '' ? null : Number(inp.value); save(); renderPdfPins(gs); renderBudgetCard(gs); }
+    });
+  });
+  wrap.querySelectorAll('select[data-mow-budget]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === sel.dataset.mowBudget);
+      if (a) { a.budgetCategory = sel.value; save(); renderBudgetCard(gs); }
+    });
+  });
+  wrap.querySelectorAll('button[data-mow-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この草刈りエリアを削除しますか？')) return;
+      gs.mowAreas = gs.mowAreas.filter(a => a.id !== btn.dataset.mowDel);
+      save();
+      renderPdfPins(gs);
+      renderBudgetCard(gs);
+    });
+  });
 }
 
 function renderPinList(gs) {
@@ -2293,24 +2841,66 @@ function resetPdfModeButtons() {
   document.getElementById('btnPinAddMode').textContent = '📍 クリックで通常のメモピンを追加';
   document.getElementById('btnPdfTreeFell').textContent = '🪓 配置図クリックで伐採予定の木を追加';
   document.getElementById('btnPdfTreePrune').textContent = '✂️ 配置図クリックで剪定予定の木を追加';
+  document.getElementById('btnMowDraw').textContent = '🌿 配置図クリックで草刈りエリアを描く';
+  document.getElementById('mowDrawActions').style.display = mowDrawMode ? 'flex' : 'none';
+  if (mowDrawMode) document.getElementById('btnMowDraw').textContent = `🖱️ クリックで頂点を追加中...（${mowDraftPoints.length}点）`;
 }
 
 document.getElementById('btnPinAddMode').addEventListener('click', () => {
   pinAddMode = !pinAddMode;
   pdfTreeAddMode = null;
+  mowDrawMode = false; mowDraftPoints = [];
   resetPdfModeButtons();
   if (pinAddMode) document.getElementById('btnPinAddMode').textContent = '🖱️ 配置図をクリックしてピンを配置...（再クリックでキャンセル）';
+  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
 
 function armPdfTreeAddMode(type) {
   pinAddMode = false;
+  mowDrawMode = false; mowDraftPoints = [];
   pdfTreeAddMode = (pdfTreeAddMode === type) ? null : type;
   resetPdfModeButtons();
   if (pdfTreeAddMode === '伐採') document.getElementById('btnPdfTreeFell').textContent = '🖱️ クリックして伐採予定の木を配置...（再クリックでキャンセル）';
   if (pdfTreeAddMode === '剪定') document.getElementById('btnPdfTreePrune').textContent = '🖱️ クリックして剪定予定の木を配置...（再クリックでキャンセル）';
+  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 }
 document.getElementById('btnPdfTreeFell').addEventListener('click', () => armPdfTreeAddMode('伐採'));
 document.getElementById('btnPdfTreePrune').addEventListener('click', () => armPdfTreeAddMode('剪定'));
+
+document.getElementById('btnMowDraw').addEventListener('click', () => {
+  mowDrawMode = !mowDrawMode;
+  mowDraftPoints = [];
+  pinAddMode = false;
+  pdfTreeAddMode = null;
+  resetPdfModeButtons();
+  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+});
+document.getElementById('btnMowCancel').addEventListener('click', () => {
+  mowDrawMode = false; mowDraftPoints = [];
+  resetPdfModeButtons();
+  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+});
+document.getElementById('btnMowConfirm').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  if (mowDraftPoints.length < 3) { alert('エリアは3点以上クリックして囲んでください'); return; }
+  const label = prompt('エリア名を入力してください', '草刈りエリア' + ((gs.mowAreas || []).length + 1));
+  if (label == null || label === '') { return; }
+  const sqmStr = prompt('面積（㎡・わかればで結構です。空欄可）', '');
+  const sqm = (sqmStr && sqmStr.trim() !== '' && !isNaN(Number(sqmStr))) ? Number(sqmStr) : null;
+  const amountStr = prompt('見積額（円・わかればで結構です。空欄可）', '');
+  const amount = (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null;
+  ensureMowShape(gs);
+  gs.mowAreas.push({
+    id: uid(), label, points: mowDraftPoints.slice(), sqm, amount,
+    budgetCategory: budgetCategories[0] || null, consumedBy: null
+  });
+  mowDrawMode = false; mowDraftPoints = [];
+  save();
+  resetPdfModeButtons();
+  renderPdfPins(gs);
+  renderBudgetCard(gs);
+});
 
 document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
   const gs = getGreen(currentId);
@@ -2321,6 +2911,13 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
   const y = ((e.clientY - rect.top) / rect.height) * 100;
   if (x < 0 || x > 100 || y < 0 || y > 100) return;
 
+  if (mowDrawMode) {
+    mowDraftPoints.push({ x, y });
+    resetPdfModeButtons();
+    renderPdfPins(gs);
+    return;
+  }
+
   if (pdfTreeAddMode) {
     const type = pdfTreeAddMode;
     const label = prompt('木の名称・説明を入力してください', type === '剪定' ? '剪定予定の木' : '伐採予定の木');
@@ -2330,12 +2927,13 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
       if (!gs.treeMarkers) gs.treeMarkers = [];
       const newTree = {
         id: uid(), x, y, label, diameter: null, photo: null,
-        works: [{ id: uid(), type, date: null, note: '', amount, done: false, consumedBy: null }]
+        works: [{ id: uid(), type, date: null, note: '', amount, budgetCategory: budgetCategories[0] || null, done: false, consumedBy: null }]
       };
       gs.treeMarkers.push(newTree);
       save();
       renderPdfPins(gs);
       renderTreeMarkerList(gs);
+      renderBudgetCard(gs);
       // Jump straight to this tree's card so a 現場写真 can be attached right away (built for on-site phone use).
       requestAnimationFrame(() => {
         const anchor = document.querySelector(`[data-diameter="${newTree.id}"]`);
@@ -2393,8 +2991,11 @@ function renderSummary() {
   // rather than per row (same accounting as the sidebar box, just surfaced here for convenience).
   const envTotal = envTaxBudgets[y];
   const envUsed = data.reduce((sum, gs) => sum + gs.records
-    .filter(r => r.envTax && String(r.year) === String(y))
-    .reduce((s, r) => s + Number(r.cost || 0), 0), 0);
+    .filter(r => String(r.year) === String(y))
+    .reduce((s, r) => {
+      normalizeItemBudgets(r);
+      return s + (r.items || []).filter(it => it.envTax).reduce((s2, it) => s2 + Number(it.cost || 0), 0);
+    }, 0), 0);
   const envBox = document.getElementById('summaryEnvTaxBox');
   if (envTotal == null) {
     envBox.innerHTML = `<div class="budget-cat-name">🌲 環境譲与税予算（全緑地合計）</div>
@@ -2425,22 +3026,30 @@ function renderSummary() {
 
     ensureBudgetsShape(gs);
     const budgetForYear = gs.budgets[y] || {};
-    let totalBudget = 0;
-    budgetCategories.forEach(cat => {
-      const t = budgetForYear[cat];
-      if (t != null) totalBudget += Number(t);
-    });
-    // Aggregate across every budget, so this stays correct regardless of how a record's items are split.
-    const totalSpent = records.reduce((s, r) => s + Number(r.cost || 0), 0);
-    const pct = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : (totalSpent > 0 ? 100 : 0);
-    const envSpent = records.filter(r => r.envTax).reduce((s, r) => s + Number(r.cost || 0), 0);
+    // Budget belongs to each work item/category, so no single combined total — list each category on its own.
+    // Unrecorded 剪定・伐採 estimates on the site plan count too (見積), matching the per-green budget cards.
+    const catBreakdown = budgetCategories.map(cat => {
+      let spent = 0;
+      records.forEach(r => {
+        normalizeItemBudgets(r);
+        (r.items || []).forEach(item => { if (item.budgetCategory === cat) spent += Number(item.cost || 0); });
+      });
+      const plannedSum = collectPlannedTreeWorks(gs, cat, y).reduce((s, p) => s + Number(p.work.amount || 0), 0)
+        + collectPlannedMowAreas(gs, cat).reduce((s, a) => s + Number(a.amount || 0), 0);
+      const total = budgetForYear[cat];
+      return { cat, spent: spent + plannedSum, plannedSum, total };
+    }).filter(c => c.spent > 0 || c.total != null);
+    const envSpent = records.reduce((s, r) => {
+      normalizeItemBudgets(r);
+      return s + (r.items || []).filter(it => it.envTax).reduce((s2, it) => s2 + Number(it.cost || 0), 0);
+    }, 0);
     const pendingTreeCount = (gs.treeMarkers || []).reduce((s, t) => s + (t.works || []).filter(w => !w.done).length, 0);
 
-    return { gs, nextRound, pendingCount, totalBudget, totalSpent, pct, envSpent, pendingTreeCount };
+    return { gs, nextRound, pendingCount, catBreakdown, envSpent, pendingTreeCount };
   });
 
   wrap.innerHTML = `<table><tr>
-    <th>緑地名</th><th>次の予定</th><th>未対応の回数</th><th>未対応の木</th><th>予算使用状況</th><th>環境譲与税対象額</th><th></th>
+    <th>緑地名</th><th>次の予定</th><th>未対応の回数</th><th>未対応の木</th><th>予算ごとの使用状況</th><th>環境譲与税対象額</th><th></th>
   </tr>` + rows.map(row => `
     <tr>
       <td><strong>${escapeHtml(row.gs.name)}</strong></td>
@@ -2448,10 +3057,15 @@ function renderSummary() {
       <td>${row.pendingCount}件</td>
       <td>${row.pendingTreeCount}本</td>
       <td>
-        ${row.totalBudget > 0
-          ? `¥${row.totalSpent.toLocaleString()} / ¥${row.totalBudget.toLocaleString()}
-             <div class="budget-progress-track" style="width:120px;"><div class="budget-progress-fill" style="width:${Math.min(row.pct, 100)}%; background:${row.pct >= 100 ? '#c62828' : (row.pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>`
-          : `¥${row.totalSpent.toLocaleString()}（予算未設定）`}
+        ${row.catBreakdown.length
+          ? row.catBreakdown.map(c => {
+              const pct = c.total > 0 ? Math.round((c.spent / c.total) * 100) : (c.spent > 0 ? 100 : 0);
+              return `<div style="font-size:12px; white-space:nowrap; margin-bottom:3px;">
+                <b>${escapeHtml(c.cat)}</b>：¥${c.spent.toLocaleString()}${c.total != null ? ' / ¥' + Number(c.total).toLocaleString() : '（予算未設定）'}${c.plannedSum > 0 ? `<span style="color:#777;">（うち見積 ¥${c.plannedSum.toLocaleString()}）</span>` : ''}
+                ${c.total != null ? `<div class="budget-progress-track" style="width:110px;"><div class="budget-progress-fill" style="width:${Math.min(pct, 100)}%; background:${pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>` : ''}
+              </div>`;
+            }).join('')
+          : '<span class="empty-msg">記録なし</span>'}
       </td>
       <td>${row.envSpent > 0 ? `<span class="env-tax-badge">🌲 ¥${row.envSpent.toLocaleString()}</span>` : '-'}</td>
       <td><button data-open="${row.gs.id}">開く</button></td>
@@ -2466,6 +3080,52 @@ function renderSummary() {
   });
 }
 
+// ---- 草刈りアラート（5〜6月＝夏前、9〜10月＝秋。完了チェックで消える） ----
+function renderMowAlert() {
+  const wrap = document.getElementById('mowAlertWrap');
+  const season = currentMowSeason();
+  if (!season || data.length === 0) {
+    wrap.innerHTML = '';
+    return;
+  }
+  const year = new Date().getFullYear();
+  const pending = data.filter(gs => !isMowDone(gs, season, year));
+  if (pending.length === 0) {
+    wrap.innerHTML = `<div class="mow-alert-bar">🌿 ${mowSeasonLabel(season)}の草刈り：全緑地チェック済みです ✅</div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="mow-alert-bar">
+    <b>🌿 ${mowSeasonLabel(season)}の草刈りの時期です！</b><br>
+    未完了 ${pending.length}件：クリックで各緑地を開いて確認・完了チェックしてください。<br>
+    ${pending.map(gs => `<span class="mow-alert-green" data-mow-open="${gs.id}">${escapeHtml(gs.name)}</span>`).join('')}
+  </div>`;
+  wrap.querySelectorAll('[data-mow-open]').forEach(el => {
+    el.addEventListener('click', () => openDetail(el.dataset.mowOpen));
+  });
+}
+
+function renderMowChecks(gs) {
+  ensureMowShape(gs);
+  const y = gs.selectedYear;
+  document.getElementById('mowCheckYearLabel').textContent = y;
+  const checks = gs.mowChecks[y] || {};
+  document.getElementById('mowCheckEarly').checked = !!checks.early;
+  document.getElementById('mowCheckAutumn').checked = !!checks.autumn;
+}
+['mowCheckEarly', 'mowCheckAutumn'].forEach(id => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    const gs = getGreen(currentId);
+    if (!gs) return;
+    ensureMowShape(gs);
+    const y = gs.selectedYear;
+    if (!gs.mowChecks[y]) gs.mowChecks[y] = {};
+    gs.mowChecks[y][id === 'mowCheckEarly' ? 'early' : 'autumn'] = e.target.checked;
+    save();
+    renderMowAlert();
+    renderGreenList();
+  });
+});
+
 function renderAll() {
   renderMarkers();
   renderTreeMarkers();
@@ -2478,6 +3138,7 @@ function renderAll() {
   renderPeopleTags();
   renderContractorTags();
   renderEnvTaxBox();
+  renderMowAlert();
 }
 
 renderAll();
