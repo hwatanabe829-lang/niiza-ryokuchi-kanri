@@ -289,6 +289,56 @@
     background: #ffb300;
     color: #4a3200;
   }
+
+  /* Fiscal-year bar: pinned to the top of the detail panel so it's always obvious
+     which year's budgets/records are on screen (site-plan data carries across years). */
+  .year-bar {
+    position: sticky;
+    top: -16px; /* cancel #detail's top padding so the bar hugs the panel edge */
+    z-index: 600;
+    background: linear-gradient(135deg, #1b5e20, #2e7d32);
+    color: white;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+  .year-bar-current {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  .year-bar-note { font-size: 12px; font-weight: normal; opacity: 0.85; }
+  .year-bar-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .year-bar-controls select,
+  .year-bar-controls input {
+    padding: 5px 6px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .year-bar-controls input { width: 90px; }
+  .year-bar-controls button {
+    background: white;
+    color: var(--green);
+    font-weight: bold;
+  }
+  .year-bar .help { color: rgba(255,255,255,0.8); }
+  .work-year-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: bold;
+    background: #e0e0e0;
+    color: #555;
+    white-space: nowrap;
+  }
   .leaflet-tooltip.green-name-label {
     background: rgba(255,255,255,0.92);
     border: 1px solid var(--green);
@@ -376,20 +426,20 @@
     margin-top: 4px;
   }
 
-  #recDetailsMore {
+  #recDetailsMore, #basicInfoDetails {
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 10px;
     margin: 10px 0;
     background: #fafafa;
   }
-  #recDetailsMore summary {
+  #recDetailsMore summary, #basicInfoDetails summary {
     cursor: pointer;
     font-size: 13px;
     font-weight: bold;
     color: var(--green);
   }
-  #recDetailsMore[open] summary { margin-bottom: 8px; }
+  #recDetailsMore[open] summary, #basicInfoDetails[open] summary { margin-bottom: 8px; }
 
   /* Prominent budget card: left = amounts/usage, right = which-budget selector */
   .budget-card {
@@ -596,14 +646,34 @@
     #mainArea { height: calc(100vh - 44px - 200px); min-height: 300px; }
     #map { height: 100%; }
 
+    /* ドロワーパネル: 下からスライドアップ */
     #detail {
+      display: block !important;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      bottom: -1000px;
+      left: 0;
+      right: 0;
       width: 100% !important;
-      height: 100% !important;
+      height: 85vh !important;
       border-left: none;
+      border-top: 1px solid var(--border);
       z-index: 1000;
-      padding: 12px;
+      padding: 0 !important;
+      background: white;
+      overflow-y: auto;
+      transition: bottom 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+      background-image:
+        linear-gradient(to bottom, #fff 0%, #fff 32px, transparent 32px),
+        linear-gradient(to right, transparent 40%, #ddd 48%, #ddd 52%, transparent 60%);
+      background-repeat: no-repeat;
+      background-position: 0 0, center 8px;
+      background-size: 100% 32px, 40px 4px;
+      padding-top: 32px !important;
+    }
+
+    #detail.open {
+      bottom: 0;
     }
 
     .budget-card { flex-direction: column; }
@@ -615,7 +685,15 @@
 
     .row2, .row3 { flex-direction: column; gap: 4px; }
 
-    .close-btn { font-size: 22px; padding: 4px 12px; top: 8px; right: 8px; }
+    .close-btn {
+      font-size: 22px;
+      padding: 4px 12px;
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      z-index: 1001;
+    }
+    .year-bar { top: 0; margin-top: 0; }
   }
 </style>
 </head>
@@ -705,36 +783,49 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <h2 id="detailName">緑地名</h2>
 
-  <div class="field">
-    <label>緑地名</label>
-    <input type="text" id="editName">
+  <div class="year-bar">
+    <div class="year-bar-current">📅 <span id="yearBarLabel">-</span>年度 <span class="year-bar-note">を表示・編集中</span></div>
+    <div class="year-bar-controls">
+      <select id="yearSelect"></select>
+      <input type="number" id="newYearInput" placeholder="例: 2027">
+      <button id="btnAddYear">年度を追加</button>
+    </div>
+    <small class="help" style="margin-top:2px;">敷地図・木のデータは年度をまたいで引き継がれます。予算・作業記録・草刈りチェックは、ここで選んだ年度のものが表示されます。</small>
   </div>
-  <div class="field">
-    <label>メモ・備考</label>
-    <textarea id="editMemo" rows="2"></textarea>
+
+  <h3>📄 緑地詳細図（敷地図にプロット）</h3>
+  <div class="pdf-wrap">
+    <div class="editing-banner" id="roundFilterBanner"></div>
+    <div id="pdfCanvasHolder" style="display:none;">
+      <canvas id="pdfCanvas"></canvas>
+      <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+    </div>
+    <div id="pdfControls" style="display:none; margin-top:8px;">
+      <div class="row2">
+        <button class="outline" id="btnPdfTreeFell" style="width:100%;">🪓 配置図クリックで伐採予定の木を追加</button>
+        <button class="outline" id="btnPdfTreePrune" style="width:100%;">✂️ 配置図クリックで剪定予定の木を追加</button>
+      </div>
+      <button class="outline" id="btnMowDraw" style="width:100%; margin-top:8px;">🌿 配置図クリックで草刈りエリアを描く</button>
+      <div class="row2" id="mowDrawActions" style="display:none; margin-top:8px;">
+        <button id="btnMowConfirm" style="width:100%;">✅ このエリアで確定</button>
+        <button class="secondary" id="btnMowCancel" style="width:100%;">キャンセル</button>
+      </div>
+      <button class="outline" id="btnPinAddMode" style="width:100%; margin-top:8px;">📍 クリックで通常のメモピンを追加</button>
+      <div id="mowAreaList" style="margin-top:8px;"></div>
+      <div id="pinList" style="margin-top:8px;"></div>
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
+      <input type="file" id="pdfUpload" accept="application/pdf,image/*">
+      <small class="help" id="pdfFileName"></small>
+    </div>
   </div>
-  <button id="btnSaveInfo">基本情報を保存</button>
-  <button class="outline" id="btnRepositionMap">🗺️ 地図上の位置を設定/変更</button>
-  <button class="danger" id="btnDeleteGreen">この緑地を削除</button>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>🌳 伐採・剪定予定の木</h3>
   <div id="treeMarkerList"></div>
-  <small class="help">下の「📄敷地図にプロット」で配置した木がここに一覧表示されます。樹径・状況写真を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。「対応済み」にチェックした作業の本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。</small>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>📅 対象年度</h3>
-  <div class="field">
-    <label>この緑地で表示・編集する年度</label>
-    <select id="yearSelect"></select>
-  </div>
-  <div class="row2">
-    <div class="field"><input type="number" id="newYearInput" placeholder="例: 2027"></div>
-    <div class="field"><button id="btnAddYear" style="width:100%;">年度を追加</button></div>
-  </div>
-  <small class="help">緑地ごとに別々の年度を管理できます。予算・作業記録はここで選んだ年度に紐づきます。</small>
+  <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます。樹径・状況写真を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。「対応済み」にチェックした作業の本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。選択中の年度以外の日付の作業には年度バッジが付きます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -754,38 +845,8 @@
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>🗂️ 作業回ごとの管理（<span id="roundYearLabel">-</span>年度）</h3>
-  <small class="help">保全作業記録を「回」として一覧表示します。行の「この回を地図で見る」を押すと、下の敷地図にその回の対象（伐採・剪定予定の木）だけが表示されます。</small>
+  <small class="help">保全作業記録を「回」として一覧表示します。行の「この回を地図で見る」を押すと、上の詳細図にその回の対象（伐採・剪定予定の木、草刈りエリア）だけが表示されます。</small>
   <div id="roundTableWrap" style="margin-top:8px;"></div>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>📄 敷地図にプロット</h3>
-  <div class="pdf-wrap">
-    <div class="editing-banner" id="roundFilterBanner"></div>
-    <div class="field">
-      <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
-      <input type="file" id="pdfUpload" accept="application/pdf,image/*">
-      <small class="help" id="pdfFileName"></small>
-    </div>
-    <div id="pdfCanvasHolder" style="display:none;">
-      <canvas id="pdfCanvas"></canvas>
-      <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
-    </div>
-    <div id="pdfControls" style="display:none; margin-top:8px;">
-      <div class="row2">
-        <button class="outline" id="btnPdfTreeFell" style="width:100%;">🪓 配置図クリックで伐採予定の木を追加</button>
-        <button class="outline" id="btnPdfTreePrune" style="width:100%;">✂️ 配置図クリックで剪定予定の木を追加</button>
-      </div>
-      <button class="outline" id="btnMowDraw" style="width:100%; margin-top:8px;">🌿 配置図クリックで草刈りエリアを描く</button>
-      <div class="row2" id="mowDrawActions" style="display:none; margin-top:8px;">
-        <button id="btnMowConfirm" style="width:100%;">✅ このエリアで確定</button>
-        <button class="secondary" id="btnMowCancel" style="width:100%;">キャンセル</button>
-      </div>
-      <button class="outline" id="btnPinAddMode" style="width:100%; margin-top:8px;">📍 クリックで通常のメモピンを追加</button>
-      <div id="mowAreaList" style="margin-top:8px;"></div>
-      <div id="pinList" style="margin-top:8px;"></div>
-    </div>
-  </div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -844,6 +905,23 @@
     <label for="showAllYears">すべての年度を表示</label>
   </div>
   <div id="recordTableWrap"></div>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <details id="basicInfoDetails">
+    <summary>⚙️ 基本情報の編集（緑地名・メモ・地図上の位置・削除）</summary>
+    <div class="field" style="margin-top:8px;">
+      <label>緑地名</label>
+      <input type="text" id="editName">
+    </div>
+    <div class="field">
+      <label>メモ・備考</label>
+      <textarea id="editMemo" rows="2"></textarea>
+    </div>
+    <button id="btnSaveInfo">基本情報を保存</button>
+    <button class="outline" id="btnRepositionMap">🗺️ 地図上の位置を設定/変更</button>
+    <button class="danger" id="btnDeleteGreen">この緑地を削除</button>
+  </details>
 </div>
 
 <div class="modal-overlay" id="photoModal">
@@ -1096,6 +1174,7 @@ function renderTreeMarkerList(gs) {
         ${sortWorksForDisplay(t.works).map(w => `
           <div class="work-row${w.done ? ' done' : ''}">
             ${w.seqLabel ? `<span class="seq-badge ${w.seqClass}">${w.seqLabel}</span>` : ''}
+            ${w.date && String(w.date).slice(0, 4) !== String(gs.selectedYear) ? `<span class="work-year-badge">${escapeHtml(String(w.date).slice(0, 4))}年度</span>` : ''}
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
             <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
             <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="見積額（円）" style="width:110px;">
@@ -1143,7 +1222,7 @@ function renderTreeMarkerList(gs) {
       const [treeId, workId] = inp.dataset.workDate.split('|');
       const t = gs.treeMarkers.find(x => x.id === treeId);
       const w = t && t.works.find(x => x.id === workId);
-      if (w) { w.date = inp.value; save(); renderTreeMarkers(); renderBudgetCard(gs); }
+      if (w) { w.date = inp.value; save(); renderTreeMarkers(); renderBudgetCard(gs); renderTreeMarkerList(gs); }
     });
   });
   wrap.querySelectorAll('input[data-work-amount]').forEach(inp => {
@@ -1688,6 +1767,7 @@ function renderYearSelect(gs) {
   const sel = document.getElementById('yearSelect');
   sel.innerHTML = gs.years.slice().sort((a, b) => b - a)
     .map(y => `<option value="${y}" ${y === gs.selectedYear ? 'selected' : ''}>${y}年度</option>`).join('');
+  document.getElementById('yearBarLabel').textContent = gs.selectedYear;
   document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
   document.getElementById('recordYearLabel').textContent = gs.selectedYear;
 }
@@ -1698,12 +1778,14 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
   gs.selectedYear = Number(e.target.value);
   save();
   selectedRoundId = null;
+  document.getElementById('yearBarLabel').textContent = gs.selectedYear;
   document.getElementById('budgetYearLabel').textContent = gs.selectedYear;
   document.getElementById('recordYearLabel').textContent = gs.selectedYear;
   renderMowChecks(gs);
   renderBudgetCard(gs);
   renderRecordTable(gs);
   renderPdfPins(gs);
+  renderTreeMarkerList(gs);
 });
 
 document.getElementById('btnAddYear').addEventListener('click', () => {
@@ -1739,7 +1821,14 @@ function openDetail(id) {
     }
   }
   resetRecordForm();
-  document.getElementById('detail').style.display = 'block';
+  const detailEl = document.getElementById('detail');
+  if (window.innerWidth <= 640) {
+    detailEl.classList.add('open');
+  } else {
+    detailEl.style.display = 'block';
+  }
+  detailEl.scrollTop = 0; // 詳細図が先頭に来るよう、開いた時は必ず一番上から表示
+  document.getElementById('basicInfoDetails').open = false;
   document.getElementById('detailName').textContent = gs.name;
   document.getElementById('editName').value = gs.name;
   document.getElementById('editMemo').value = gs.memo || '';
@@ -1752,7 +1841,12 @@ function openDetail(id) {
 }
 
 document.getElementById('btnCloseDetail').addEventListener('click', () => {
-  document.getElementById('detail').style.display = 'none';
+  const detailEl = document.getElementById('detail');
+  if (window.innerWidth <= 640) {
+    detailEl.classList.remove('open');
+  } else {
+    detailEl.style.display = 'none';
+  }
   currentId = null;
   renderGreenList();
 });
@@ -1771,10 +1865,63 @@ document.getElementById('btnDeleteGreen').addEventListener('click', () => {
   if (!confirm('この緑地を削除しますか？関連する全記録も削除されます。')) return;
   data = data.filter(g => g.id !== currentId);
   save();
-  document.getElementById('detail').style.display = 'none';
+  const detailEl = document.getElementById('detail');
+  if (window.innerWidth <= 640) {
+    detailEl.classList.remove('open');
+  } else {
+    detailEl.style.display = 'none';
+  }
   currentId = null;
   renderAll();
 });
+
+// ---- Mobile drawer swipe/drag functionality ----
+if (window.innerWidth <= 640) {
+  const detailEl = document.getElementById('detail');
+  let dragStartY = 0;
+  let isDragging = false;
+
+  detailEl.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    dragStartY = touch.clientY;
+    isDragging = true;
+  });
+
+  detailEl.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - dragStartY;
+    // ドラッグ時に微かな visual feedback を提供（後で必要に応じて追加）
+  });
+
+  detailEl.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    const touch = e.changedTouches[0];
+    const deltaY = touch.clientY - dragStartY;
+    const threshold = 80; // ドラッグ距離の閾値（80px以上で状態変更）
+
+    if (deltaY > threshold) {
+      // 下へ引っ張った → パネルを閉じる
+      detailEl.classList.remove('open');
+    } else if (deltaY < -threshold) {
+      // 上へ引っ張った → パネルを開く
+      detailEl.classList.add('open');
+    }
+  });
+
+  // ハンドル領域のクリックで開閉切り替え
+  detailEl.addEventListener('click', (e) => {
+    if (e.target === detailEl || (e.target.parentElement === detailEl && !e.target.closest('input, button, select, textarea, label, a'))) {
+      // パネル背景（ハンドル）のクリック検出
+      const rect = detailEl.getBoundingClientRect();
+      if (e.clientY - rect.top < 32) {
+        // ハンドル領域のクリック → 開閉切り替え
+        detailEl.classList.toggle('open');
+      }
+    }
+  });
+}
 
 // ---- Budget (scoped to the green space's currently selected fiscal year AND budget category) ----
 function ensureBudgetsShape(gs) {
