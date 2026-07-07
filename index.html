@@ -804,7 +804,15 @@
         <input type="text" id="newBudgetCatInput" placeholder="新しい予算名（例：維持管理予算）">
       </div>
       <button id="btnAddBudgetCat">予算の種類を追加</button>
-      <small class="help">※環境譲与税予算はここではなく、上の「🌲 環境譲与税 予算」欄で別会計として管理します。</small>
+      <small class="help">✏️で予算名を変更できます（登録済みの作業・木・予算額も新しい名前に引き継がれます）。※環境譲与税予算はここではなく、上の「🌲 環境譲与税 予算」欄で別会計として管理します。</small>
+    </div>
+    <div class="panel-section">
+      <h2>💾 データのバックアップ</h2>
+      <small class="help">データはこのブラウザの中にだけ保存されています。端末の変更・買い替え・閲覧履歴の削除で<b>全データが消えます</b>。定期的にファイルへ保存してください。</small>
+      <div id="storageMeter" style="margin:8px 0;"></div>
+      <button id="btnExportBackup" style="width:100%;">⬇️ バックアップをファイルに保存</button>
+      <button class="outline" id="btnImportBackup" style="width:100%; margin-top:6px;">⬆️ バックアップファイルから復元</button>
+      <input type="file" id="backupImportInput" accept=".json,application/json" style="display:none;">
     </div>
   </div>
 
@@ -1028,7 +1036,63 @@ let treeMoveTargetId = null; // 誤タップした木を敷地図タップで置
 let markers = {};
 let treeMarkers = {};
 
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); updateStorageMeter(); }
+
+// ---- データのバックアップ（書き出し・復元・容量表示） ----
+const BACKUP_KEYS = [STORAGE_KEY, TYPES_KEY, STATUS_KEY, BUDCAT_KEY, PEOPLE_KEY, CONTRACTORS_KEY, ENVTAX_BUDGET_KEY];
+
+function updateStorageMeter() {
+  const el = document.getElementById('storageMeter');
+  if (!el) return;
+  // localStorageはUTF-16なので概算バイト数は文字数×2。上限はブラウザ実装によるが約5MBが一般的。
+  let chars = 0;
+  BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v) chars += v.length + k.length; });
+  const mb = (chars * 2) / (1024 * 1024);
+  const pct = Math.min(Math.round((mb / 5) * 100), 100);
+  const color = pct >= 90 ? '#c62828' : (pct >= 70 ? '#f57c00' : '#2e7d32');
+  el.innerHTML = `
+    <div style="font-size:12px; color:#555;">保存領域の使用量: 約${mb.toFixed(2)}MB / 5MB（${pct}%）${pct >= 70 ? ' ⚠️ 写真の登録数にご注意ください' : ''}</div>
+    <div class="budget-progress-track"><div class="budget-progress-fill" style="width:${pct}%; background:${color};"></div></div>`;
+}
+
+document.getElementById('btnExportBackup').addEventListener('click', () => {
+  const payload = { app: 'niiza-ryokuchi-kanri', version: 1, exportedAt: new Date().toISOString(), stores: {} };
+  BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) payload.stores[k] = v; });
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `緑地管理バックアップ_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('btnImportBackup').addEventListener('click', () => {
+  document.getElementById('backupImportInput').click();
+});
+document.getElementById('backupImportInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let payload;
+    try { payload = JSON.parse(reader.result); } catch { alert('バックアップファイルを読み取れませんでした（JSON形式ではありません）'); return; }
+    if (!payload || payload.app !== 'niiza-ryokuchi-kanri' || !payload.stores) {
+      alert('このファイルは緑地管理システムのバックアップではないようです');
+      return;
+    }
+    const when = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString('ja-JP') : '不明';
+    if (!confirm(`バックアップ（保存日時: ${when}）の内容で、このブラウザのデータをすべて置き換えます。\n現在のデータは失われます。よろしいですか？`)) return;
+    BACKUP_KEYS.forEach(k => {
+      if (payload.stores[k] != null) localStorage.setItem(k, payload.stores[k]);
+      else localStorage.removeItem(k);
+    });
+    alert('復元しました。ページを再読み込みします。');
+    location.reload();
+  };
+  reader.readAsText(file);
+});
 function saveTypes() { localStorage.setItem(TYPES_KEY, JSON.stringify(types)); }
 function saveStatuses() { localStorage.setItem(STATUS_KEY, JSON.stringify(statuses)); }
 function saveBudgetCategories() { localStorage.setItem(BUDCAT_KEY, JSON.stringify(budgetCategories)); }
@@ -1674,22 +1738,66 @@ function renderRecStatusSelect() {
 }
 
 // ---- Budget categories (e.g. 通常予算 / 環境譲与税予算 etc.) ----
+// 予算名の変更: 名前は作業項目・木の作業・草刈りエリア・年度別予算額のキーとして
+// 全データに文字列で埋まっているため、まとめて新しい名前へ付け替える。
+function renameBudgetCategory(oldName, newName) {
+  const idx = budgetCategories.indexOf(oldName);
+  if (idx === -1) return;
+  budgetCategories[idx] = newName;
+  data.forEach(gs => {
+    Object.values(gs.budgets || {}).forEach(yearBudgets => {
+      if (yearBudgets && Object.prototype.hasOwnProperty.call(yearBudgets, oldName)) {
+        yearBudgets[newName] = yearBudgets[oldName];
+        delete yearBudgets[oldName];
+      }
+    });
+    (gs.records || []).forEach(r => {
+      if (r.budgetCategory === oldName) r.budgetCategory = newName;
+      (r.items || []).forEach(it => { if (it.budgetCategory === oldName) it.budgetCategory = newName; });
+    });
+    (gs.treeMarkers || []).forEach(t => (t.works || []).forEach(w => {
+      if (w.budgetCategory === oldName) w.budgetCategory = newName;
+    }));
+    (gs.mowAreas || []).forEach(a => { if (a.budgetCategory === oldName) a.budgetCategory = newName; });
+    if (gs.displayBudgetCategory === oldName) gs.displayBudgetCategory = newName;
+  });
+  save();
+  saveBudgetCategories();
+}
+
+function refreshBudgetCatViews() {
+  renderBudgetCatTags();
+  const gs = getGreen(currentId);
+  if (gs) {
+    renderBudgetCategorySelectInto('itemBudgetCategory');
+    renderBudgetCard(gs);
+    renderTreeMarkerList(gs);
+    renderPdfPins(gs);
+    renderRecordTable(gs);
+  }
+}
+
 function renderBudgetCatTags() {
   const wrap = document.getElementById('budgetCatTags');
   wrap.innerHTML = '';
   budgetCategories.forEach((c, i) => {
     const tag = document.createElement('div');
     tag.className = 'tag';
-    tag.innerHTML = `<span>${escapeHtml(c)}</span><button data-i="${i}">✕</button>`;
-    tag.querySelector('button').addEventListener('click', () => {
+    tag.innerHTML = `<span>${escapeHtml(c)}</span><button data-rename="${i}" title="名前を変更">✏️</button><button data-i="${i}">✕</button>`;
+    tag.querySelector('button[data-rename]').addEventListener('click', () => {
+      const newName = prompt(`「${c}」の新しい予算名を入力してください`, c);
+      if (newName == null) return;
+      const v = newName.trim();
+      if (!v || v === c) return;
+      if (budgetCategories.includes(v)) { alert('同じ名前の予算がすでにあります'); return; }
+      renameBudgetCategory(c, v);
+      refreshBudgetCatViews();
+    });
+    tag.querySelector('button[data-i]').addEventListener('click', () => {
+      if (!confirm(`予算「${c}」を選択肢から削除しますか？\n（登録済みの作業などに付いた予算名はそのまま残ります。名前を変えたい場合は✏️を使ってください）`)) return;
       budgetCategories.splice(i, 1);
       saveBudgetCategories();
-      renderBudgetCatTags();
-      const gs = getGreen(currentId);
-      if (gs) {
-        renderBudgetCategorySelectInto('itemBudgetCategory');
-        renderBudgetCard(gs);
-      }
+      refreshBudgetCatViews();
     });
     wrap.appendChild(tag);
   });
@@ -3421,6 +3529,7 @@ function renderAll() {
   renderContractorTags();
   renderEnvTaxBox();
   renderMowAlert();
+  updateStorageMeter();
 }
 
 renderAll();
