@@ -857,41 +857,13 @@
     </div>
   </div>
 
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>🌳 伐採・剪定予定の木</h3>
-  <div id="treeMarkerList"></div>
-  <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます。樹径・状況写真を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。「対応済み」にチェックした作業の本数は、下の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。選択中の年度以外の日付の作業には年度バッジが付きます。</small>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>🌿 草刈りチェック（<span id="mowCheckYearLabel">-</span>年度）</h3>
-  <div class="mow-check-box">
-    <div class="checkbox-field">
-      <input type="checkbox" id="mowCheckEarly">
-      <label for="mowCheckEarly">夏前（5〜6月）の草刈り 完了</label>
-    </div>
-    <div class="checkbox-field">
-      <input type="checkbox" id="mowCheckAutumn">
-      <label for="mowCheckAutumn">秋（9〜10月）の草刈り 完了</label>
-    </div>
-    <small class="help">5〜6月・9〜10月になると、未完了の緑地に自動でアラートが出ます。完了したらチェックしてください。</small>
-  </div>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>🗂️ 作業回ごとの管理（<span id="roundYearLabel">-</span>年度）</h3>
-  <small class="help">保全作業記録を「回」として一覧表示します。行の「この回を地図で見る」を押すと、上の詳細図にその回の対象（伐採・剪定予定の木、草刈りエリア）だけが表示されます。</small>
+  <h3 style="margin-top:14px;">🗂️ 今回の作業内容（<span id="roundYearLabel">-</span>年度の作業回）</h3>
+  <small class="help">「この回を図面で見る」を押すと、上の詳細図にその回の対象（伐採・剪定の木、草刈りエリア）だけが表示されます。「✏️ 編集」で下のフォームに内容を呼び出し、修正して保存できます。</small>
   <div id="roundTableWrap" style="margin-top:8px;"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと）</h3>
-  <div id="budgetCardsWrap"></div>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>保全作業記録の追加（<span id="recordYearLabel">-</span>年度）</h3>
+  <h3 id="recordFormHeading">保全作業記録の追加（<span id="recordYearLabel">-</span>年度）</h3>
   <div class="editing-banner" id="editingBanner">✏️ この記録を編集中です（保存すると上書きされます）</div>
   <div class="field"><label>実施日</label><input type="date" id="recDate"></div>
 
@@ -932,6 +904,32 @@
 
   <button id="btnAddRecord" style="margin-top:10px;">記録を追加</button>
   <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>🌳 伐採・剪定予定の木</h3>
+  <div id="treeMarkerList"></div>
+  <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます。樹径・状況写真を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。「対応済み」にチェックした作業の本数は、上の「保全作業記録の追加」で伐採／剪定を選ぶと本数欄に自動入力されます。選択中の年度以外の日付の作業には年度バッジが付きます。</small>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>🌿 草刈りチェック（<span id="mowCheckYearLabel">-</span>年度）</h3>
+  <div class="mow-check-box">
+    <div class="checkbox-field">
+      <input type="checkbox" id="mowCheckEarly">
+      <label for="mowCheckEarly">夏前（5〜6月）の草刈り 完了</label>
+    </div>
+    <div class="checkbox-field">
+      <input type="checkbox" id="mowCheckAutumn">
+      <label for="mowCheckAutumn">秋（9〜10月）の草刈り 完了</label>
+    </div>
+    <small class="help">5〜6月・9〜10月になると、未完了の緑地に自動でアラートが出ます。完了したらチェックしてください。</small>
+  </div>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと）</h3>
+  <div id="budgetCardsWrap"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -2555,7 +2553,8 @@ function renderRoundTable(gs) {
         <td>${escapeHtml(recordBudgetSummary(r))}${recordHasEnvTax(r) ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
         <td>${escapeHtml(r.status || '-')}</td>
         <td>
-          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を地図で見る'}</button>
+          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を図面で見る'}</button>
+          <button class="outline" data-round-edit="${r.id}">✏️ 編集</button>
           <button class="outline" data-round-doc="${r.id}">📄 Word</button>
         </td>
       </tr>
@@ -2566,6 +2565,16 @@ function renderRoundTable(gs) {
       selectedRoundId = (selectedRoundId === btn.dataset.round) ? null : btn.dataset.round;
       renderRoundTable(gs);
       renderPdfPins(gs);
+      // 図面はこの表のすぐ上にあるので、反映結果が見えるようスクロールを戻す
+      if (selectedRoundId) document.getElementById('pdfCanvasHolder').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  wrap.querySelectorAll('button[data-round-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 図面にもこの回を表示してから、下のフォームへ内容を呼び出す
+      selectedRoundId = btn.dataset.roundEdit;
+      renderPdfPins(gs);
+      editRecord(gs, btn.dataset.roundEdit);
     });
   });
   wrap.querySelectorAll('button[data-round-doc]').forEach(btn => {
