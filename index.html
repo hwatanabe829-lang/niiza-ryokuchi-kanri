@@ -289,6 +289,21 @@
     background: #ffb300;
     color: #4a3200;
   }
+  #mainArea { position: relative; }
+  #btnLocate {
+    position: absolute;
+    bottom: 18px;
+    right: 14px;
+    z-index: 1100;
+    background: white;
+    color: var(--green);
+    font-weight: bold;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 10px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  #btnLocate:active { background: #e8f5e9; }
 
   /* Fiscal-year bar: pinned to the top of the detail panel so it's always obvious
      which year's budgets/records are on screen (site-plan data carries across years). */
@@ -694,6 +709,25 @@
       z-index: 1001;
     }
     .year-bar { top: 0; margin-top: 0; }
+
+    /* ---- 現場スマホ向けのタップしやすさ調整 ---- */
+    /* iOSはフォーカスした入力欄のフォントが16px未満だと画面ごと自動ズームしてしまうため16pxに */
+    input, select, textarea,
+    .field input, .field select, .field textarea { font-size: 16px; }
+    input[type="checkbox"] { width: 22px; height: 22px; }
+    button { min-height: 44px; }
+    .tag button { min-height: 0; }
+    .work-row { font-size: 13px; gap: 6px; padding: 8px 8px; }
+    .work-row input[type="date"], .work-row input[type="text"] { font-size: 16px; padding: 6px 6px; }
+    .work-row select { padding: 6px 4px; }
+    .work-row button.danger { min-height: 36px; }
+    .pin-item input, .pin-item select { font-size: 16px !important; }
+    /* 敷地図上のマーカーを大きく（タップ・視認しやすく） */
+    .pdf-tree-icon { font-size: 28px; }
+    .pdf-pin { width: 26px; height: 26px; }
+    .pdf-tree-amount-label { font-size: 12px; padding: 2px 7px; }
+    .mow-area-label { font-size: 12px; padding: 2px 8px; }
+    .tree-card-header { flex-wrap: wrap; gap: 6px; }
   }
 </style>
 </head>
@@ -776,6 +810,7 @@
 
   <div id="mainArea">
     <div id="map"></div>
+    <button id="btnLocate" title="現在地へ移動">📍 現在地</button>
   </div>
 </div>
 
@@ -796,6 +831,7 @@
   <h3>📄 緑地詳細図（敷地図にプロット）</h3>
   <div class="pdf-wrap">
     <div class="editing-banner" id="roundFilterBanner"></div>
+    <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
     <div id="pdfCanvasHolder" style="display:none;">
       <canvas id="pdfCanvas"></canvas>
       <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
@@ -990,6 +1026,7 @@ let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree mar
 let selectedRoundId = null; // record id whose site-plan trees are being isolated in the "作業回ごとの管理" table
 let mowDrawMode = false;    // clicking the site plan adds vertices of a new 草刈りエリア polygon
 let mowDraftPoints = [];    // vertices (%) of the polygon being drawn
+let treeMoveTargetId = null; // 誤タップした木を敷地図タップで置き直すモード（現場スマホ向け）
 let markers = {};
 let treeMarkers = {};
 
@@ -1001,12 +1038,55 @@ function savePeopleList() { localStorage.setItem(PEOPLE_KEY, JSON.stringify(peop
 function saveContractorList() { localStorage.setItem(CONTRACTORS_KEY, JSON.stringify(contractorList)); }
 function saveEnvTaxBudgets() { localStorage.setItem(ENVTAX_BUDGET_KEY, JSON.stringify(envTaxBudgets)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// 現場スマホ撮影の写真をそのまま保存するとlocalStorage(約5MB)がすぐ溢れるため、
+// 保存前に長辺1280px・JPEG品質0.85へ自動縮小する（画質は記録用途には十分）。
+function resizePhoto(file, callback) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1280;
+      let { width, height } = img;
+      if (width <= MAX && height <= MAX && file.size < 400 * 1024) { callback(reader.result); return; }
+      const scale = Math.min(MAX / width, MAX / height, 1);
+      const c = document.createElement('canvas');
+      c.width = Math.round(width * scale);
+      c.height = Math.round(height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      callback(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => callback(reader.result);
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ---- Map ----
 const map = L.map('map', { zoomSnap: 0.5, zoomDelta: 0.5, maxZoom: 19, minZoom: 4 }).setView(NIIZA_CENTER, 14);
+
+// 現在地ボタン: 現場に着いたら1タップで自分の位置へ地図を移動（GitHub Pages=HTTPSなので位置情報が使える）
+let locationCircle = null;
+document.getElementById('btnLocate').addEventListener('click', () => {
+  const btn = document.getElementById('btnLocate');
+  if (!navigator.geolocation) { alert('この端末では位置情報が利用できません'); return; }
+  btn.textContent = '📡 取得中...';
+  navigator.geolocation.getCurrentPosition(pos => {
+    btn.textContent = '📍 現在地';
+    const { latitude, longitude } = pos.coords;
+    map.setView([latitude, longitude], Math.max(map.getZoom(), 16));
+    if (locationCircle) map.removeLayer(locationCircle);
+    locationCircle = L.circleMarker([latitude, longitude], {
+      radius: 9, color: '#1a73e8', weight: 3, fillColor: '#1a73e8', fillOpacity: 0.4
+    }).addTo(map).bindPopup('現在地');
+  }, err => {
+    btn.textContent = '📍 現在地';
+    alert('現在地を取得できませんでした（位置情報の許可を確認してください）: ' + err.message);
+  }, { enableHighAccuracy: true, timeout: 10000 });
+});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors',
   maxZoom: 19,
@@ -1163,7 +1243,10 @@ function renderTreeMarkerList(gs) {
     <div class="tree-card">
       <div class="tree-card-header">
         <strong>${treeMarkerIconEmoji(t)} ${escapeHtml(t.label)}</strong>
-        <button class="danger" data-del-tree="${t.id}">この木を削除</button>
+        <span>
+          <button class="outline" data-move-tree="${t.id}">📍 位置を修正</button>
+          <button class="danger" data-del-tree="${t.id}">この木を削除</button>
+        </span>
       </div>
       <div class="row2">
         <div class="field"><label>樹径（cm）</label><input type="number" data-diameter="${t.id}" value="${t.diameter != null ? t.diameter : ''}" placeholder="例: 30"></div>
@@ -1206,9 +1289,7 @@ function renderTreeMarkerList(gs) {
       const file = e.target.files[0];
       const t = gs.treeMarkers.find(x => x.id === inp.dataset.treePhoto);
       if (!file || !t) return;
-      const reader = new FileReader();
-      reader.onload = () => { t.photo = reader.result; save(); renderTreeMarkerList(gs); };
-      reader.readAsDataURL(file);
+      resizePhoto(file, (dataUrl) => { t.photo = dataUrl; save(); renderTreeMarkerList(gs); });
     });
   });
   wrap.querySelectorAll('img[data-tree-photo-view]').forEach(img => {
@@ -1297,6 +1378,7 @@ function renderTreeMarkerList(gs) {
   wrap.querySelectorAll('button[data-del-tree]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!confirm('この木のマーカーを削除しますか？')) return;
+      if (treeMoveTargetId === btn.dataset.delTree) { treeMoveTargetId = null; renderTreeMoveBanner(gs); }
       gs.treeMarkers = gs.treeMarkers.filter(t => t.id !== btn.dataset.delTree);
       save();
       renderTreeMarkers();
@@ -1304,6 +1386,37 @@ function renderTreeMarkerList(gs) {
       renderTreeMarkerList(gs);
       renderBudgetCard(gs);
     });
+  });
+  wrap.querySelectorAll('button[data-move-tree]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      treeMoveTargetId = (treeMoveTargetId === btn.dataset.moveTree) ? null : btn.dataset.moveTree;
+      pinAddMode = false;
+      pdfTreeAddMode = null;
+      mowDrawMode = false; mowDraftPoints = [];
+      resetPdfModeButtons();
+      renderTreeMoveBanner(gs);
+      if (treeMoveTargetId) {
+        document.getElementById('pdfCanvasHolder').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  });
+}
+
+// 位置修正モード中は敷地図の上に案内バナーを出す（現場でどの木を動かしているか迷わないように）
+function renderTreeMoveBanner(gs) {
+  const banner = document.getElementById('treeMoveBanner');
+  const t = treeMoveTargetId && gs ? (gs.treeMarkers || []).find(x => x.id === treeMoveTargetId) : null;
+  if (!t) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+  banner.style.display = 'block';
+  banner.innerHTML = `📍 「${escapeHtml(t.label)}」の新しい位置を敷地図でタップしてください　`
+    + `<button class="secondary" id="btnCancelTreeMove">キャンセル</button>`;
+  document.getElementById('btnCancelTreeMove').addEventListener('click', () => {
+    treeMoveTargetId = null;
+    renderTreeMoveBanner(gs);
   });
 }
 
@@ -2144,13 +2257,11 @@ function renderBudgetCard(gs) {
 document.getElementById('recPhoto').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
+  resizePhoto(file, (dataUrl) => {
     const img = document.getElementById('recPhotoPreview');
-    img.src = reader.result;
+    img.src = dataUrl;
     img.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+  });
 });
 
 // ---- Work items (multiple per record: e.g. 草刈り100㎡ + 剪定3本 in one order) ----
@@ -2743,6 +2854,9 @@ function renderPdfSection(gs) {
   const controls = document.getElementById('pdfControls');
   pinAddMode = false;
   pdfTreeAddMode = null;
+  mowDrawMode = false; mowDraftPoints = [];
+  treeMoveTargetId = null;
+  renderTreeMoveBanner(gs);
   resetPdfModeButtons();
 
   if (!gs.pdf) {
@@ -3057,6 +3171,18 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
   const x = ((e.clientX - rect.left) / rect.width) * 100;
   const y = ((e.clientY - rect.top) / rect.height) * 100;
   if (x < 0 || x > 100 || y < 0 || y > 100) return;
+
+  if (treeMoveTargetId) {
+    const t = gs.treeMarkers && gs.treeMarkers.find(m => m.id === treeMoveTargetId);
+    if (t) {
+      t.x = x; t.y = y;
+      save();
+      renderPdfPins(gs);
+    }
+    treeMoveTargetId = null;
+    renderTreeMoveBanner(gs);
+    return;
+  }
 
   if (mowDrawMode) {
     mowDraftPoints.push({ x, y });
