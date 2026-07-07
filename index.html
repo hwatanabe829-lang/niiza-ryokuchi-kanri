@@ -810,7 +810,12 @@
       <h2>💾 データのバックアップ</h2>
       <small class="help">データはこのブラウザの中にだけ保存されています。端末の変更・買い替え・閲覧履歴の削除で<b>全データが消えます</b>。定期的にファイルへ保存してください。</small>
       <div id="storageMeter" style="margin:8px 0;"></div>
-      <button id="btnExportBackup" style="width:100%;">⬇️ バックアップをファイルに保存</button>
+      <button id="btnQuickBackup" style="width:100%; display:none;">⚡ ワンクリック上書きバックアップ</button>
+      <div id="backupMetaRow" style="display:none; align-items:center; justify-content:space-between; gap:6px; margin-top:4px;">
+        <small class="help" id="backupMeta" style="margin:0;"></small>
+        <button class="outline" id="btnChangeBackupTarget" style="font-size:11px; padding:2px 8px; min-height:0; white-space:nowrap;">保存先を変更</button>
+      </div>
+      <button class="outline" id="btnExportBackup" style="width:100%; margin-top:6px;">⬇️ バックアップをファイルに保存（ダウンロード）</button>
       <button class="outline" id="btnImportBackup" style="width:100%; margin-top:6px;">⬆️ バックアップファイルから復元</button>
       <input type="file" id="backupImportInput" accept=".json,application/json" style="display:none;">
     </div>
@@ -1055,17 +1060,102 @@ function updateStorageMeter() {
     <div class="budget-progress-track"><div class="budget-progress-fill" style="width:${pct}%; background:${color};"></div></div>`;
 }
 
-document.getElementById('btnExportBackup').addEventListener('click', () => {
+function buildBackupPayload() {
   const payload = { app: 'niiza-ryokuchi-kanri', version: 1, exportedAt: new Date().toISOString(), stores: {} };
   BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) payload.stores[k] = v; });
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  return payload;
+}
+
+// 最終バックアップの日時・保存先名（この端末だけの情報なのでバックアップ対象には含めない）
+const BACKUP_META_KEY = 'niiza_backup_meta_v1';
+function recordBackupMeta(name) {
+  localStorage.setItem(BACKUP_META_KEY, JSON.stringify({ name, at: new Date().toISOString() }));
+  renderBackupMeta();
+}
+function renderBackupMeta() {
+  const el = document.getElementById('backupMeta');
+  const meta = JSON.parse(localStorage.getItem(BACKUP_META_KEY) || 'null');
+  if (!meta) { el.textContent = 'まだバックアップしていません'; return; }
+  el.textContent = `最終: ${new Date(meta.at).toLocaleString('ja-JP')}（${meta.name}）`;
+}
+
+document.getElementById('btnExportBackup').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(buildBackupPayload())], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   const d = new Date();
   a.download = `緑地管理バックアップ_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  recordBackupMeta(a.download);
 });
+
+// ---- ワンクリック上書きバックアップ（File System Access API・Chrome/Edge向け） ----
+// 保存先のファイルハンドルはlocalStorageに入れられないため、IndexedDBに保持する。
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const rq = indexedDB.open('niiza_backup_db', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+function idbSet(key, val) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function idbGet(key) {
+  return idbOpen().then(db => new Promise((resolve, reject) => {
+    const rq = db.transaction('kv', 'readonly').objectStore('kv').get(key);
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  }));
+}
+
+async function pickBackupTarget() {
+  const handle = await window.showSaveFilePicker({
+    suggestedName: '緑地管理バックアップ.json',
+    types: [{ description: 'JSONファイル', accept: { 'application/json': ['.json'] } }]
+  });
+  await idbSet('backupHandle', handle);
+  return handle;
+}
+
+async function quickBackup(forcePick) {
+  try {
+    let handle = forcePick ? null : await idbGet('backupHandle');
+    if (handle) {
+      // ブラウザセッションごとに書き込み許可の確認が必要な場合がある（1クリックで再許可）
+      let perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') handle = null;
+    }
+    if (!handle) handle = await pickBackupTarget();
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(buildBackupPayload()));
+    await writable.close();
+    recordBackupMeta(handle.name);
+    const btn = document.getElementById('btnQuickBackup');
+    const orig = btn.textContent;
+    btn.textContent = '✅ 保存しました';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  } catch (err) {
+    if (err && (err.name === 'AbortError')) return; // 保存先選択のキャンセル
+    alert('上書き保存に失敗しました: ' + (err && err.message ? err.message : err));
+  }
+}
+
+if (window.showSaveFilePicker) {
+  document.getElementById('btnQuickBackup').style.display = 'block';
+  document.getElementById('backupMetaRow').style.display = 'flex';
+  document.getElementById('btnQuickBackup').addEventListener('click', () => quickBackup(false));
+  document.getElementById('btnChangeBackupTarget').addEventListener('click', () => quickBackup(true));
+  renderBackupMeta();
+}
 
 document.getElementById('btnImportBackup').addEventListener('click', () => {
   document.getElementById('backupImportInput').click();
