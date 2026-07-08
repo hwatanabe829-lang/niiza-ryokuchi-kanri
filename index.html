@@ -1409,7 +1409,7 @@ function renderTreeMarkerList(gs) {
         ${sortWorksForDisplay(t.works).map(w => `
           <div class="work-row${w.done ? ' done' : ''}">
             ${w.seqLabel ? `<span class="seq-badge ${w.seqClass}">${w.seqLabel}</span>` : ''}
-            ${w.date && String(w.date).slice(0, 4) !== String(gs.selectedYear) ? `<span class="work-year-badge">${escapeHtml(String(w.date).slice(0, 4))}年度</span>` : ''}
+            ${w.date && fiscalYearOfDate(w.date) !== Number(gs.selectedYear) ? `<span class="work-year-badge">${fiscalYearOfDate(w.date)}年度</span>` : ''}
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
             <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
             <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="見積額（円）" style="width:110px;">
@@ -2264,6 +2264,13 @@ function recordHasEnvTax(r) {
   return (r.items || []).some(it => it.envTax);
 }
 
+// 年度は4月始まり: 2027年1月の作業は2026年度に属する
+function fiscalYearOfDate(dateStr) {
+  const y = Number(String(dateStr).slice(0, 4));
+  const m = Number(String(dateStr).slice(5, 7));
+  return m >= 4 ? y : y - 1;
+}
+
 // 剪定・伐採 plotted on the site plan are 保全作業 too: their 見積額 counts against the budget
 // as a 見積(planned) amount until a 保全作業記録 claims them (consumedBy) — then the record
 // item's cost takes over, so nothing is double-counted. Undated works are treated as belonging
@@ -2275,7 +2282,7 @@ function collectPlannedTreeWorks(gs, cat, year) {
     (t.works || []).forEach(w => {
       if (w.consumedBy || w.amount == null) return;
       if ((w.budgetCategory || budgetCategories[0]) !== cat) return;
-      if (w.date && String(w.date).slice(0, 4) !== String(year)) return;
+      if (w.date && fiscalYearOfDate(w.date) !== Number(year)) return;
       out.push({ tree: t, work: w });
     });
   });
@@ -2566,7 +2573,15 @@ document.getElementById('btnCancelEdit').addEventListener('click', () => {
     const r = gs && gs.records.find(x => x.id === editingRecordId);
     if (gs && r) {
       (r.items || []).forEach(item => {
-        if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
+        if (item.workRefs && item.workRefs.length) {
+          // 記録が参照していた木の作業を正確に消込み直す
+          item.workRefs.forEach(ref => {
+            const t = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+            const w = t && t.works && t.works.find(x => x.id === ref.workId);
+            if (w) { w.done = true; w.consumedBy = r.id; }
+          });
+        } else if ((item.type === '伐採' || item.type === '剪定') && item.qty) {
+          // workRefsを持たない旧形式の記録のみ本数ベースで復元
           consumeTreeMarkers(gs, item.type, item.qty, r.id);
         }
         if (item.areaRefs && item.areaRefs.length) {
