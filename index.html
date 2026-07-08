@@ -313,6 +313,24 @@
   }
   .login-box h2 { margin: 0 0 10px; font-size: 20px; }
   .login-box p { font-size: 13px; opacity: 0.9; }
+  /* 係の選択ボタン（公園係／みどりの係） */
+  .login-section-btns { display: flex; gap: 8px; margin-bottom: 12px; }
+  .login-section-btns .section-btn {
+    flex: 1;
+    padding: 14px 6px;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.5);
+    background: transparent;
+    color: #fff;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .login-section-btns .section-btn.selected {
+    background: #fff;
+    color: #1b5e20;
+    border-color: #fff;
+  }
   .login-box input {
     width: 100%;
     padding: 12px;
@@ -789,6 +807,7 @@
 
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
+  <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
   <div class="hint">地図をクリックして緑地を新規登録できます</div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
@@ -799,13 +818,17 @@
 <div id="loginOverlay">
   <div class="login-box">
     <h2>🌳 新座市 緑地管理システム</h2>
-    <p>職員共有アカウントでログインしてください。<br>グリーンサポーターアプリと共通のパスワードです。</p>
+    <p>係を選んで、係のパスワードでログインしてください。</p>
+    <div class="login-section-btns">
+      <button type="button" class="section-btn" data-section="koen">🏞️ 公園係</button>
+      <button type="button" class="section-btn" data-section="midori">🌿 みどりの係</button>
+    </div>
     <form id="loginForm">
-      <input type="password" id="loginPassword" placeholder="共通パスワード" required autocomplete="current-password">
+      <input type="password" id="loginPassword" placeholder="係のパスワード" required autocomplete="current-password">
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データはクラウドに保存され、全職員で共有されます。</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。</p>
   </div>
 </div>
 
@@ -1137,8 +1160,29 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "900444170329",
   appId: "1:900444170329:web:7c3a37eb2ca430eda02948",
 };
-const GREENS_COL = 'ryokuchi_greens';
-const SETTINGS_DOC = ['ryokuchi_settings', 'config'];
+// 係ごとのアカウントとデータ領域（公園係とみどりの係で完全に分離して管理する）
+const SECTION_ACCOUNTS = {
+  koen:   { email: 'hwatanabe829+koen@gmail.com',   label: '公園係' },
+  midori: { email: 'hwatanabe829+midori@gmail.com', label: 'みどりの係' },
+};
+let currentSection = null; // ログイン後に 'koen' | 'midori' が入る
+let GREENS_COL = null;     // ログイン後に係別のコレクション名が入る
+let SETTINGS_DOC = null;
+
+// 旧・共有データ（みどりの係へ引き継ぎ後はバックアップとして残置）
+const LEGACY_GREENS_COL = 'ryokuchi_greens';
+const LEGACY_SETTINGS_DOC = ['ryokuchi_settings', 'config'];
+
+function setSection(sectionKey) {
+  currentSection = sectionKey;
+  GREENS_COL = `ryokuchi_${sectionKey}_greens`;
+  SETTINGS_DOC = [`ryokuchi_${sectionKey}_settings`, 'config'];
+  const badge = document.getElementById('sectionBadge');
+  if (badge) {
+    badge.textContent = SECTION_ACCOUNTS[sectionKey].label;
+    badge.style.display = '';
+  }
+}
 const MAX_PHOTO_CHARS = 1300000; // Firestoreの1MB/doc制限に対する安全マージン
 
 let db = null;
@@ -1292,6 +1336,35 @@ async function loadAllFromCloud() {
   ['施工書類受け取り済み', '請求書処理済み'].forEach(st => {
     if (!statuses.includes(st)) statuses.push(st);
   });
+}
+
+// みどりの係の初回ログイン時: 旧・共有領域(ryokuchi_greens)にデータがあれば
+// みどりの係の領域へ引き継ぐ（旧データはバックアップとしてそのまま残す）
+async function migrateLegacySharedIfAny() {
+  if (currentSection !== 'midori' || data.length > 0) return;
+  let legacySnap;
+  try {
+    legacySnap = await fb.getDocs(fb.collection(db, LEGACY_GREENS_COL));
+  } catch {
+    return; // 旧領域が読めない（権限なし等）場合は何もしない
+  }
+  if (legacySnap.empty) return;
+  if (!confirm(`これまでの共有データ（緑地${legacySnap.size}件）が見つかりました。\nみどりの係のデータとして引き継ぎますか？`)) return;
+  try {
+    for (const d of legacySnap.docs) {
+      await fb.setDoc(fb.doc(db, GREENS_COL, d.id), d.data());
+      const ph = await fb.getDocs(fb.collection(db, LEGACY_GREENS_COL, d.id, 'photos'));
+      for (const p of ph.docs) {
+        await fb.setDoc(fb.doc(db, GREENS_COL, d.id, 'photos', p.id), p.data());
+      }
+    }
+    const cfg = await fb.getDoc(fb.doc(db, LEGACY_SETTINGS_DOC[0], LEGACY_SETTINGS_DOC[1]));
+    if (cfg.exists()) await fb.setDoc(fb.doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]), cfg.data());
+    await loadAllFromCloud();
+    alert(`引き継ぎが完了しました（緑地${legacySnap.size}件）。`);
+  } catch (err) {
+    alert('引き継ぎ中にエラーが発生しました。再読み込み後にもう一度お試しください。\n' + err.message);
+  }
 }
 
 // 初回ログイン時: クラウドが空でこの端末に旧localStorageデータがあれば移行を提案
@@ -4020,7 +4093,13 @@ function initFirebase() {
 
   fb.onAuthStateChanged(auth, async (user) => {
     const overlay = document.getElementById('loginOverlay');
-    if (user) {
+    // 係のアカウント（公園係／みどりの係）以外のログインは受け付けない
+    // （サインアウトはしない: 同一プロジェクトのGSアプリのログイン状態を壊さないため）
+    const sectionKey = user
+      ? Object.keys(SECTION_ACCOUNTS).find(k => SECTION_ACCOUNTS[k].email === user.email)
+      : null;
+    if (user && sectionKey) {
+      setSection(sectionKey);
       overlay.classList.add('hidden-auth');
       document.getElementById('btnLogout').style.display = '';
       if (!bootDone) {
@@ -4028,6 +4107,7 @@ function initFirebase() {
         setSyncBadge();
         try {
           await loadAllFromCloud();
+          await migrateLegacySharedIfAny();
           await migrateLocalIfAny();
         } catch (err) {
           alert('データの読み込みに失敗しました。通信環境を確認して再読み込みしてください。\n' + err.message);
@@ -4041,15 +4121,32 @@ function initFirebase() {
   });
 }
 
+// ログイン画面の係選択（前回の選択を端末ごとに記憶する）
+let loginSection = localStorage.getItem('ryokuchi_login_section') || 'koen';
+function renderSectionBtns() {
+  document.querySelectorAll('.login-section-btns .section-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.section === loginSection);
+  });
+}
+document.querySelectorAll('.login-section-btns .section-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    loginSection = b.dataset.section;
+    localStorage.setItem('ryokuchi_login_section', loginSection);
+    renderSectionBtns();
+  });
+});
+renderSectionBtns();
+
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = document.getElementById('loginError');
   errEl.style.display = 'none';
   try {
-    await fb.signInWithEmailAndPassword(auth, 'hwatanabe829@gmail.com', document.getElementById('loginPassword').value);
+    const acct = SECTION_ACCOUNTS[loginSection];
+    await fb.signInWithEmailAndPassword(auth, acct.email, document.getElementById('loginPassword').value);
     document.getElementById('loginPassword').value = '';
   } catch (err) {
-    errEl.textContent = 'ログインに失敗しました。パスワードをご確認ください。';
+    errEl.textContent = `${SECTION_ACCOUNTS[loginSection].label}のログインに失敗しました。パスワードをご確認ください。`;
     errEl.style.display = 'block';
   }
 });
