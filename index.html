@@ -1217,8 +1217,10 @@ function setSection(sectionKey) {
   SETTINGS_DOC = [`ryokuchi_${sectionKey}_settings`, 'config'];
   const badge = document.getElementById('sectionBadge');
   if (badge) {
-    badge.textContent = SECTION_ACCOUNTS[sectionKey].label;
+    badge.textContent = SECTION_ACCOUNTS[sectionKey].label + ' ▼';
     badge.style.display = '';
+    badge.style.cursor = 'pointer';
+    badge.title = 'タップして係を切り替え';
   }
 }
 const MAX_PHOTO_CHARS = 1300000; // Firestoreの1MB/doc制限に対する安全マージン
@@ -4191,6 +4193,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 document.getElementById('btnLogout').addEventListener('click', () => {
   if (!confirm('ログアウトしますか？（GSアプリのログイン状態も解除されます）')) return;
+  fb.signOut(auth);
+  location.reload();
+});
+
+// ヘッダーの係名バッジをタップで係を切り替え（ログアウトしてログイン画面へ）
+document.getElementById('sectionBadge').addEventListener('click', () => {
+  if (!confirm('係を切り替えますか？\n（ログアウトしてログイン画面に戻ります）')) return;
   fb.signOut(auth);
   location.reload();
 });
