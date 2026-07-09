@@ -43,6 +43,7 @@
     flex: 1;
     min-height: 0;
   }
+  #sidebarToggle { display: none; } /* スマホでのみ表示 */
   #sidebar {
     width: 320px;
     background: white;
@@ -741,6 +742,28 @@
       border-right: none;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+      transition: height 0.2s;
+    }
+    #sidebar.collapsed {
+      height: 0;
+      min-height: 0;
+      border-bottom: none;
+      overflow: hidden;
+    }
+
+    /* パネルをたたんで地図を広く表示するボタン */
+    #sidebarToggle {
+      display: block;
+      width: 100%;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      background: #e8f5e9;
+      color: var(--green, #2e7d32);
+      font-size: 13px;
+      font-weight: bold;
+      padding: 8px;
+      min-height: 38px;
+      flex-shrink: 0;
     }
 
     #mainArea { flex: 1; height: auto; min-height: 300px; }
@@ -928,6 +951,7 @@
     </div>
   </div>
 
+  <button id="sidebarToggle" type="button">▲ パネルをたたんで地図を広く</button>
   <div id="mainArea">
     <div id="map"></div>
     <button id="btnLocate" title="現在地へ移動">📍 現在地</button>
@@ -4170,6 +4194,25 @@ document.getElementById('btnLogout').addEventListener('click', () => {
   fb.signOut(auth);
   location.reload();
 });
+
+// スマホ: 上部パネルをたたんで地図を広く表示する（状態は端末ごとに記憶）
+const sidebarToggleBtn = document.getElementById('sidebarToggle');
+const TOGGLE_LABEL_OPEN = '▲ パネルをたたんで地図を広く';
+const TOGGLE_LABEL_CLOSED = '▼ パネルを開く（予算・緑地リスト）';
+function applySidebarCollapsed(collapsed) {
+  document.getElementById('sidebar').classList.toggle('collapsed', collapsed);
+  sidebarToggleBtn.textContent = collapsed ? TOGGLE_LABEL_CLOSED : TOGGLE_LABEL_OPEN;
+  // 高さのアニメーション完了後にLeafletへコンテナサイズの変更を通知
+  setTimeout(() => map.invalidateSize(), 250);
+}
+sidebarToggleBtn.addEventListener('click', () => {
+  const collapsed = !document.getElementById('sidebar').classList.contains('collapsed');
+  localStorage.setItem('ryokuchi_sidebar_collapsed', collapsed ? '1' : '0');
+  applySidebarCollapsed(collapsed);
+});
+if (window.innerWidth <= 640 && localStorage.getItem('ryokuchi_sidebar_collapsed') === '1') {
+  applySidebarCollapsed(true);
+}
 
 document.getElementById('btnRefreshData').addEventListener('click', async () => {
   if (editingRecordId && !confirm('記録を編集中です。破棄して最新データに更新しますか？')) return;
