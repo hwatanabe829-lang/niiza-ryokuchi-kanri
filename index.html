@@ -28,9 +28,20 @@
   }
   header h1 { margin: 0; font-size: 18px; }
   header .hint { font-size: 12px; opacity: 0.9; }
+  /* ヘッダーの実際の高さに依存せず、残り空間に地図をぴったり収める
+     （100vhはスマホのURLバー分ずれるためdvhを優先） */
+  html, body { height: 100%; }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;   /* dvh非対応の古いブラウザ用 */
+    height: 100dvh;
+  }
+  header { flex-shrink: 0; }
   .layout {
     display: flex;
-    height: calc(100vh - 52px);
+    flex: 1;
+    min-height: 0;
   }
   #sidebar {
     width: 320px;
@@ -716,11 +727,13 @@
 
   /* ===== モバイル対応 ===== */
   @media (max-width: 640px) {
-    header { padding: 8px 12px; }
+    header { padding: 6px 10px; flex-wrap: wrap; gap: 4px 8px; }
     header h1 { font-size: 14px; }
     header .hint { display: none; }
+    header button { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+    #sectionBadge { font-size: 11px !important; padding: 1px 8px !important; }
 
-    .layout { flex-direction: column; height: auto; min-height: calc(100vh - 44px); }
+    .layout { flex-direction: column; flex: 1; height: auto; min-height: 0; }
 
     #sidebar {
       width: 100%;
@@ -730,7 +743,7 @@
       flex-shrink: 0;
     }
 
-    #mainArea { height: calc(100vh - 44px - 200px); min-height: 300px; }
+    #mainArea { flex: 1; height: auto; min-height: 300px; }
     #map { height: 100%; }
 
     /* ドロワーパネル: 下からスライドアップ */
@@ -742,6 +755,7 @@
       right: 0;
       width: 100% !important;
       height: 85vh !important;
+      height: 85dvh !important;
       border-left: none;
       border-top: 1px solid var(--border);
       z-index: 1000;
