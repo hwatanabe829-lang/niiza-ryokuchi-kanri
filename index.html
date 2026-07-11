@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10c</p>
   </div>
 </div>
 
@@ -986,7 +986,9 @@
 
 <div id="detail">
   <button class="close-btn" id="btnCloseDetail">✕</button>
-  <button class="drawer-close-bar" id="drawerCloseBar" type="button">✕ 閉じて地図に戻る</button>
+  <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
+  <button class="drawer-close-bar" id="drawerCloseBar" type="button"
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る</button>
   <h2 id="detailName">緑地名</h2>
 
   <div class="year-bar">
@@ -2575,6 +2577,7 @@ function openDetail(id) {
   }
   resetRecordForm();
   const detailEl = document.getElementById('detail');
+  detailEl.style.removeProperty('display'); // 「閉じる」ボタンで強制した display:none を解除
   if (window.innerWidth <= 640) {
     detailEl.classList.add('open');
   } else {
@@ -2604,9 +2607,9 @@ function openDetail(id) {
 
 function closeDetailPanel() {
   const detailEl = document.getElementById('detail');
-  // 画面幅の判定に頼らず両方の閉じ方を実行する（スマホはCSSのdisplay:block !importantが優先されるため無害）
   detailEl.classList.remove('open');
-  if (window.innerWidth > 640) detailEl.style.display = 'none';
+  // display:none を最優先で強制（モバイルCSSの display:block !important にも勝つ）
+  detailEl.style.setProperty('display', 'none', 'important');
   currentId = null;
   renderGreenList();
 }
