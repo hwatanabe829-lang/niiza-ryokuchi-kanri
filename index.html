@@ -138,6 +138,7 @@
     font-size: 18px;
     padding: 2px 8px;
   }
+  .drawer-close-bar { display: none; } /* スマホでのみ表示 */
   .budget-line {
     background: var(--green-light);
     border-radius: 6px;
@@ -815,9 +816,34 @@
       position: fixed;
       top: 8px;
       right: 8px;
-      z-index: 1001;
+      z-index: 4000;
+      background: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     }
-    .year-bar { top: 0; margin-top: 0; }
+    /* パネルが閉じている時は×を出さない（fixedのため親が画面外でも表示されてしまう） */
+    #detail:not(.open) .close-btn { display: none; }
+
+    /* パネル最上部の大きな「閉じる」バー（スクロールに追従・確実に押せる） */
+    .drawer-close-bar {
+      display: block;
+      position: sticky;
+      top: -16px; /* #detailのpadding-top分を打ち消して上端に張り付く */
+      z-index: 700;
+      width: 100%;
+      padding: 12px;
+      margin: 0 0 10px;
+      background: #fff;
+      color: var(--green, #2e7d32);
+      border: 1px solid var(--border, #ddd);
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+    .year-bar { top: 40px; margin-top: 0; }
 
     /* ---- 現場スマホ向けのタップしやすさ調整 ---- */
     /* iOSはフォーカスした入力欄のフォントが16px未満だと画面ごと自動ズームしてしまうため16pxに */
@@ -865,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10b</p>
   </div>
 </div>
 
@@ -960,6 +986,7 @@
 
 <div id="detail">
   <button class="close-btn" id="btnCloseDetail">✕</button>
+  <button class="drawer-close-bar" id="drawerCloseBar" type="button">✕ 閉じて地図に戻る</button>
   <h2 id="detailName">緑地名</h2>
 
   <div class="year-bar">
@@ -2575,16 +2602,16 @@ function openDetail(id) {
   }
 }
 
-document.getElementById('btnCloseDetail').addEventListener('click', () => {
+function closeDetailPanel() {
   const detailEl = document.getElementById('detail');
-  if (window.innerWidth <= 640) {
-    detailEl.classList.remove('open');
-  } else {
-    detailEl.style.display = 'none';
-  }
+  // 画面幅の判定に頼らず両方の閉じ方を実行する（スマホはCSSのdisplay:block !importantが優先されるため無害）
+  detailEl.classList.remove('open');
+  if (window.innerWidth > 640) detailEl.style.display = 'none';
   currentId = null;
   renderGreenList();
-});
+}
+document.getElementById('btnCloseDetail').addEventListener('click', closeDetailPanel);
+document.getElementById('drawerCloseBar').addEventListener('click', closeDetailPanel);
 
 document.getElementById('btnSaveInfo').addEventListener('click', () => {
   const gs = getGreen(currentId);
