@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10c</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10d</p>
   </div>
 </div>
 
@@ -988,7 +988,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る</button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v10d</span></button>
   <h2 id="detailName">緑地名</h2>
 
   <div class="year-bar">
@@ -2615,6 +2615,8 @@ function closeDetailPanel() {
 }
 document.getElementById('btnCloseDetail').addEventListener('click', closeDetailPanel);
 document.getElementById('drawerCloseBar').addEventListener('click', closeDetailPanel);
+// 起動直後は必ずパネルを閉じた状態にする（何らかの理由で開いたまま起動する端末があったため）
+closeDetailPanel();
 
 document.getElementById('btnSaveInfo').addEventListener('click', () => {
   const gs = getGreen(currentId);
