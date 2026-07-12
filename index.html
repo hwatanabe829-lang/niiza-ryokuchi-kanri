@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-10d</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12a</p>
   </div>
 </div>
 
@@ -988,7 +988,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v10d</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12a</span></button>
   <h2 id="detailName">緑地名</h2>
 
   <div class="year-bar">
@@ -1101,7 +1101,8 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと）</h3>
+  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと・全緑地共通）</h3>
+  <p style="font-size:12px; color:#777; margin:2px 0 8px;">予算額と使用状況はすべての緑地の合算です。どの緑地から見ても同じ数字になります。</p>
   <div id="budgetCardsWrap"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
@@ -1194,6 +1195,8 @@ let data = [];
 let types = DEFAULT_TYPES.slice();
 let statuses = DEFAULT_STATUSES.slice();
 let budgetCategories = DEFAULT_BUDCATS.slice();
+// 年度×予算種別ごとの全体予算額（全緑地共通。どの緑地から見ても同じ数字になる）
+let categoryBudgets = {}; // { [year]: { [cat]: amount } }
 let peopleList = [];
 let contractorList = [];
 let envTaxBudgets = {};
@@ -1361,6 +1364,7 @@ function saveSettings() {
       await fb.setDoc(fb.doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]), {
         types, statuses, budgetCategories,
         people: peopleList, contractors: contractorList, envTaxBudgets,
+        categoryBudgets,
       });
       syncErrored = false;
     } catch {
@@ -1400,7 +1404,20 @@ async function loadAllFromCloud() {
     peopleList = Array.isArray(c.people) ? c.people : [];
     contractorList = Array.isArray(c.contractors) ? c.contractors : [];
     envTaxBudgets = c.envTaxBudgets || {};
+    categoryBudgets = c.categoryBudgets || {};
   }
+  // 旧仕様（緑地ごとの予算額）からの引き継ぎ:
+  // 全体予算が未設定の年度・予算種別だけ、各緑地に設定されていた額を取り込む
+  data.forEach(gs => {
+    Object.entries(gs.budgets || {}).forEach(([yr, cats]) => {
+      if (!cats || typeof cats !== 'object') return;
+      Object.entries(cats).forEach(([cat, amount]) => {
+        if (amount == null) return;
+        if (!categoryBudgets[yr]) categoryBudgets[yr] = {};
+        if (categoryBudgets[yr][cat] == null) categoryBudgets[yr][cat] = Number(amount);
+      });
+    });
+  });
   // 完了判定に使う進捗段階は必ず存在させる（旧データからの移行時の欠落対策）
   ['施工書類受け取り済み', '請求書処理済み'].forEach(st => {
     if (!statuses.includes(st)) statuses.push(st);
@@ -2813,7 +2830,8 @@ function renderBudgetCard(gs) {
   ensureBudgetsShape(gs);
   const wrap = document.getElementById('budgetCardsWrap');
   const y = gs.selectedYear;
-  const budgetForYear = gs.budgets[y] || {};
+  // 予算は全緑地共通（categoryBudgets）。使用状況も全緑地の合算で表示する
+  const budgetForYear = categoryBudgets[y] || {};
 
   if (budgetCategories.length === 0) {
     wrap.innerHTML = '<div class="empty-msg">予算の種類が登録されていません（左のサイドバーから追加してください）</div>';
@@ -2823,20 +2841,23 @@ function renderBudgetCard(gs) {
   wrap.innerHTML = budgetCategories.map((cat, i) => {
     const total = budgetForYear[cat];
     const entries = [];
-    gs.records.filter(r => String(r.year) === String(y)).forEach(r => {
-      normalizeItemBudgets(r);
-      (r.items || []).forEach(item => {
-        if (item.budgetCategory === cat) entries.push({ r, item });
+    const planned = [];
+    const plannedMow = [];
+    data.forEach(g => {
+      (g.records || []).filter(r => String(r.year) === String(y)).forEach(r => {
+        normalizeItemBudgets(r);
+        (r.items || []).forEach(item => {
+          if (item.budgetCategory === cat) entries.push({ g, r, item });
+        });
       });
+      // Site-plan tree works (剪定・伐採) and 草刈りエリア not yet recorded: their 見積額 counts as planned usage.
+      collectPlannedTreeWorks(g, cat, y).forEach(p => planned.push({ g, tree: p.tree, work: p.work }));
+      collectPlannedMowAreas(g, cat).forEach(a => plannedMow.push({ g, area: a }));
     });
     entries.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || ''));
     const spent = entries.reduce((s, e) => s + Number(e.item.cost || 0), 0);
-
-    // Site-plan tree works (剪定・伐採) and 草刈りエリア not yet recorded: their 見積額 counts as planned usage.
-    const planned = collectPlannedTreeWorks(gs, cat, y);
-    const plannedMow = collectPlannedMowAreas(gs, cat);
     const plannedSum = planned.reduce((s, p) => s + Number(p.work.amount || 0), 0)
-      + plannedMow.reduce((s, a) => s + Number(a.amount || 0), 0);
+      + plannedMow.reduce((s, x) => s + Number(x.area.amount || 0), 0);
     const combined = spent + plannedSum;
     const breakdownHtml = plannedSum > 0
       ? `<div class="budget-remain">内訳: 記録済み ¥${spent.toLocaleString()} ＋ 見積（未記録） ¥${plannedSum.toLocaleString()}</div>`
@@ -2860,22 +2881,31 @@ function renderBudgetCard(gs) {
         ${breakdownHtml}`;
     }
 
+    // 他の緑地の分は緑地名を付けて表示する（予算は全緑地共通のため）
+    const greenPrefix = (g) => g.id !== gs.id ? `<b>${escapeHtml(g.name)}</b>: ` : '';
     const plannedRowsHtml = planned.map(p => `
       <div class="budget-cat-record-row">
         <span>${escapeHtml(p.work.date || '未定')}</span>
-        <span>${p.work.type === '剪定' ? '✂️' : '🪓'} ${escapeHtml(p.work.type)} [${escapeHtml(p.tree.label)}]</span>
+        <span>${greenPrefix(p.g)}${p.work.type === '剪定' ? '✂️' : '🪓'} ${escapeHtml(p.work.type)} [${escapeHtml(p.tree.label)}]</span>
         <span class="status-badge">見積（未記録）</span>
         <span class="brow-cost">¥${Number(p.work.amount).toLocaleString()}</span>
       </div>`).join('')
-      + plannedMow.map(a => `
+      + plannedMow.map(x => `
       <div class="budget-cat-record-row">
         <span>未定</span>
-        <span>🌿 草刈り [${escapeHtml(a.label)}]${a.sqm != null ? ` ${a.sqm}㎡` : ''}</span>
+        <span>${greenPrefix(x.g)}🌿 草刈り [${escapeHtml(x.area.label)}]${x.area.sqm != null ? ` ${x.area.sqm}㎡` : ''}</span>
         <span class="status-badge">見積（未記録）</span>
-        <span class="brow-cost">¥${Number(a.amount).toLocaleString()}</span>
+        <span class="brow-cost">¥${Number(x.area.amount).toLocaleString()}</span>
       </div>`).join('');
+    const foreignRowHtml = (e) => `<div class="budget-cat-record-row">
+      <span>${escapeHtml(e.r.date || '-')}</span>
+      <span><b>${escapeHtml(e.g.name)}</b>: ${escapeHtml(e.item.type || '')}</span>
+      <span class="status-badge">${escapeHtml(e.r.status || '-')}</span>
+      <span class="brow-cost">¥${Number(e.item.cost || 0).toLocaleString()}</span>
+      <button class="outline" data-open-green="${e.g.id}">開く</button>
+    </div>`;
     const recordRowsHtml = (entries.length || planned.length || plannedMow.length)
-      ? plannedRowsHtml + entries.map(e => budgetCatItemRowHtml(gs, e.r, e.item)).join('')
+      ? plannedRowsHtml + entries.map(e => e.g.id === gs.id ? budgetCatItemRowHtml(gs, e.r, e.item) : foreignRowHtml(e)).join('')
       : '<div class="empty-msg">この予算の作業項目はまだありません</div>';
 
     return `
@@ -2885,7 +2915,7 @@ function renderBudgetCard(gs) {
           ${bodyHtml}
         </div>
         <div class="budget-card-side">
-          <label>予算額（円）</label>
+          <label>全体予算額（円・全緑地共通）</label>
           <input type="number" data-budget-idx="${i}" value="${total != null ? total : ''}" placeholder="500000">
           <button data-budget-set-idx="${i}">設定/更新</button>
         </div>
@@ -2902,15 +2932,18 @@ function renderBudgetCard(gs) {
       const input = wrap.querySelector(`input[data-budget-idx="${btn.dataset.budgetSetIdx}"]`);
       const amount = input.value;
       if (amount === '') { alert('予算額を入力してください'); return; }
-      ensureBudgetsShape(gs);
-      if (!gs.budgets[gs.selectedYear]) gs.budgets[gs.selectedYear] = {};
-      gs.budgets[gs.selectedYear][cat] = Number(amount);
-      save();
+      // 予算額は全緑地共通の設定として保存する
+      if (!categoryBudgets[gs.selectedYear]) categoryBudgets[gs.selectedYear] = {};
+      categoryBudgets[gs.selectedYear][cat] = Number(amount);
+      saveSettings();
       renderBudgetCard(gs);
     });
   });
   wrap.querySelectorAll('button[data-cat-edit]').forEach(btn => {
     btn.addEventListener('click', () => editRecord(gs, btn.dataset.catEdit));
+  });
+  wrap.querySelectorAll('button[data-open-green]').forEach(btn => {
+    btn.addEventListener('click', () => openDetail(btn.dataset.openGreen));
   });
 }
 
@@ -4027,10 +4060,8 @@ function renderSummary() {
     const nextRound = rounds.find(r => r.seqLabel);
     const pendingCount = rounds.filter(r => r.seqLabel).length;
 
-    ensureBudgetsShape(gs);
-    const budgetForYear = gs.budgets[y] || {};
-    // Budget belongs to each work item/category, so no single combined total — list each category on its own.
-    // Unrecorded 剪定・伐採 estimates on the site plan count too (見積), matching the per-green budget cards.
+    // 予算額は全緑地共通のため、緑地ごとの行では「この緑地が使った額」だけを出す。
+    // 未記録の剪定・伐採・草刈りの見積額も含める（予算カードと同じ数え方）
     const catBreakdown = budgetCategories.map(cat => {
       let spent = 0;
       records.forEach(r => {
@@ -4039,9 +4070,8 @@ function renderSummary() {
       });
       const plannedSum = collectPlannedTreeWorks(gs, cat, y).reduce((s, p) => s + Number(p.work.amount || 0), 0)
         + collectPlannedMowAreas(gs, cat).reduce((s, a) => s + Number(a.amount || 0), 0);
-      const total = budgetForYear[cat];
-      return { cat, spent: spent + plannedSum, plannedSum, total };
-    }).filter(c => c.spent > 0 || c.total != null);
+      return { cat, spent: spent + plannedSum, plannedSum };
+    }).filter(c => c.spent > 0);
     const envSpent = records.reduce((s, r) => {
       normalizeItemBudgets(r);
       return s + (r.items || []).filter(it => it.envTax).reduce((s2, it) => s2 + Number(it.cost || 0), 0);
@@ -4051,7 +4081,35 @@ function renderSummary() {
     return { gs, nextRound, pendingCount, catBreakdown, envSpent, pendingTreeCount };
   });
 
-  wrap.innerHTML = `<table><tr>
+  // 予算全体の状況（全緑地合算・予算カードと同じ数え方）
+  const globalCats = budgetCategories.map(cat => {
+    let spent = 0;
+    data.forEach(g => {
+      (g.records || []).filter(r => String(r.year) === String(y)).forEach(r => {
+        normalizeItemBudgets(r);
+        (r.items || []).forEach(item => { if (item.budgetCategory === cat) spent += Number(item.cost || 0); });
+      });
+      spent += collectPlannedTreeWorks(g, cat, y).reduce((s, p) => s + Number(p.work.amount || 0), 0)
+        + collectPlannedMowAreas(g, cat).reduce((s, a) => s + Number(a.amount || 0), 0);
+    });
+    const total = (categoryBudgets[y] || {})[cat];
+    return { cat, spent, total };
+  }).filter(c => c.spent > 0 || c.total != null);
+
+  const globalHtml = globalCats.length ? `<div style="margin-bottom:14px;">
+    <h3 style="margin:0 0 6px;">💰 予算全体の状況（全緑地合算・見積含む）</h3>
+    ${globalCats.map(c => {
+      const pct = c.total > 0 ? Math.round((c.spent / c.total) * 100) : (c.spent > 0 ? 100 : 0);
+      const remain = c.total != null ? c.total - c.spent : null;
+      return `<div style="font-size:13px; margin-bottom:5px;">
+        <b>${escapeHtml(c.cat)}</b>：¥${c.spent.toLocaleString()}${c.total != null ? ' / ¥' + Number(c.total).toLocaleString() : '（予算未設定）'}
+        ${remain != null ? `<span style="color:${remain < 0 ? '#c62828' : '#555'};">（残額 ¥${remain.toLocaleString()}${remain < 0 ? '・予算超過' : ''}）</span>` : ''}
+        ${c.total != null ? `<div class="budget-progress-track" style="width:220px;"><div class="budget-progress-fill" style="width:${Math.min(pct, 100)}%; background:${pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  wrap.innerHTML = globalHtml + `<table><tr>
     <th>緑地名</th><th>次の予定</th><th>未対応の回数</th><th>未対応の木</th><th>予算ごとの使用状況</th><th>環境譲与税対象額</th><th></th>
   </tr>` + rows.map(row => `
     <tr>
@@ -4061,13 +4119,9 @@ function renderSummary() {
       <td>${row.pendingTreeCount}本</td>
       <td>
         ${row.catBreakdown.length
-          ? row.catBreakdown.map(c => {
-              const pct = c.total > 0 ? Math.round((c.spent / c.total) * 100) : (c.spent > 0 ? 100 : 0);
-              return `<div style="font-size:12px; white-space:nowrap; margin-bottom:3px;">
-                <b>${escapeHtml(c.cat)}</b>：¥${c.spent.toLocaleString()}${c.total != null ? ' / ¥' + Number(c.total).toLocaleString() : '（予算未設定）'}${c.plannedSum > 0 ? `<span style="color:#777;">（うち見積 ¥${c.plannedSum.toLocaleString()}）</span>` : ''}
-                ${c.total != null ? `<div class="budget-progress-track" style="width:110px;"><div class="budget-progress-fill" style="width:${Math.min(pct, 100)}%; background:${pct >= 100 ? '#c62828' : (pct >= 80 ? '#f57c00' : '#2e7d32')};"></div></div>` : ''}
-              </div>`;
-            }).join('')
+          ? row.catBreakdown.map(c => `<div style="font-size:12px; white-space:nowrap; margin-bottom:3px;">
+                <b>${escapeHtml(c.cat)}</b>：¥${c.spent.toLocaleString()}${c.plannedSum > 0 ? `<span style="color:#777;">（うち見積 ¥${c.plannedSum.toLocaleString()}）</span>` : ''}
+              </div>`).join('')
           : '<span class="empty-msg">記録なし</span>'}
       </td>
       <td>${row.envSpent > 0 ? `<span class="env-tax-badge">🌲 ¥${row.envSpent.toLocaleString()}</span>` : '-'}</td>
