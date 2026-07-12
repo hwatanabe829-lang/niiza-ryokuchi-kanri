@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12c</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12d</p>
   </div>
 </div>
 
@@ -988,7 +988,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12c</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12d</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -3270,9 +3270,14 @@ function renderRoundTable(gs) {
     return;
   }
   const rounds = sortRoundsForDisplay(records);
-  wrap.innerHTML = `<table><tr><th></th><th>実施日</th><th>内容</th><th>見積額</th><th>予算</th><th>状態</th><th></th></tr>` +
+  // 実施日順に「1回目・2回目…」の通し番号を振る（日付未定は最後）
+  const numbered = records.slice().sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
+  const roundNo = {};
+  numbered.forEach((r, i) => { roundNo[r.id] = i + 1; });
+  wrap.innerHTML = `<table><tr><th>回</th><th></th><th>実施日</th><th>内容</th><th>見積額</th><th>予算</th><th>状態</th><th></th></tr>` +
     rounds.map(r => `
       <tr class="${r.id === selectedRoundId ? 'row-complete' : ''}">
+        <td><b>${roundNo[r.id]}回目</b></td>
         <td>${r.seqLabel ? `<span class="seq-badge ${r.seqClass}">${r.seqLabel}</span>` : ''}</td>
         <td>${escapeHtml(r.date || '-')}</td>
         <td>${roundItemsSummary(gs, r)}</td>
@@ -3318,6 +3323,10 @@ function renderRoundSummary(gs) {
   const r = selectedRoundId ? (gs.records || []).find(x => x.id === selectedRoundId) : null;
   if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
   normalizeItemBudgets(r);
+  // 「N回目」の通し番号（作業回の表と同じ数え方: 同年度内で実施日順）
+  const yearRecords = (gs.records || []).filter(x => String(x.year) === String(r.year))
+    .sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
+  const roundNo = yearRecords.findIndex(x => x.id === r.id) + 1;
   const items = r.items || [];
   const total = items.reduce((s, it) => s + Number(it.cost || 0), 0);
   const rowsHtml = items.length ? items.map(it => {
@@ -3341,7 +3350,7 @@ function renderRoundSummary(gs) {
   box.style.cssText = 'display:block; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:10px 12px; margin-top:10px;';
   box.innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-      <b>📌 選択中の回：${escapeHtml(r.date || '日付未定')}</b>
+      <b>📌 ${roundNo}回目（${escapeHtml(r.date || '日付未定')}）</b>
       <span class="status-badge">${escapeHtml(r.status || '-')}</span>
       <span style="margin-left:auto; font-weight:bold;">合計 ¥${total.toLocaleString()}</span>
       <button class="outline" id="btnRoundSummaryClose" style="min-height:0; padding:3px 10px; font-size:12px;">✕ 選択解除</button>
