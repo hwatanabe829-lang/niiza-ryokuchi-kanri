@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12c</p>
   </div>
 </div>
 
@@ -988,7 +988,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12b</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12c</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1004,7 +1004,13 @@
     <small class="help" style="margin-top:2px;">敷地図・木のデータは年度をまたいで引き継がれます。予算・作業記録・草刈りチェックは、ここで選んだ年度のものが表示されます。</small>
   </div>
 
-  <h3>📄 緑地詳細図（敷地図にプロット）</h3>
+  <h3 style="margin-top:14px;">🗂️ 作業回の一覧（<span id="roundYearLabel">-</span>年度）</h3>
+  <small class="help">「📍 この回を表示」を押すと、すぐ下にその回の作業内容と、対象の木・草刈りエリアだけを表示した図面が出ます。「✏️ 編集」で内容を修正できます。</small>
+  <div id="roundTableWrap" style="margin-top:8px;"></div>
+
+  <div id="roundSummaryBox" style="display:none;"></div>
+
+  <h3 style="margin-top:14px;">📄 緑地詳細図（敷地図にプロット）</h3>
   <div class="pdf-wrap">
     <div class="editing-banner" id="roundFilterBanner"></div>
     <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
@@ -1032,10 +1038,6 @@
       <small class="help" id="pdfFileName"></small>
     </div>
   </div>
-
-  <h3 style="margin-top:14px;">🗂️ 今回の作業内容（<span id="roundYearLabel">-</span>年度の作業回）</h3>
-  <small class="help">「この回を図面で見る」を押すと、上の詳細図にその回の対象（伐採・剪定の木、草刈りエリア）だけが表示されます。「✏️ 編集」で下のフォームに内容を呼び出し、修正して保存できます。</small>
-  <div id="roundTableWrap" style="margin-top:8px;"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -3263,7 +3265,8 @@ function renderRoundTable(gs) {
   document.getElementById('roundYearLabel').textContent = gs.selectedYear;
   const records = gs.records.filter(r => String(r.year) === String(gs.selectedYear));
   if (records.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">この年度の作業記録はまだありません</div>';
+    wrap.innerHTML = '<div class="empty-msg">この年度の作業記録はまだありません。下の「保全作業記録の追加」から1回分ずつ登録できます。</div>';
+    renderRoundSummary(gs);
     return;
   }
   const rounds = sortRoundsForDisplay(records);
@@ -3277,7 +3280,7 @@ function renderRoundTable(gs) {
         <td>${escapeHtml(recordBudgetSummary(r))}${recordHasEnvTax(r) ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
         <td>${escapeHtml(r.status || '-')}</td>
         <td>
-          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : 'この回を図面で見る'}</button>
+          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : '📍 この回を表示'}</button>
           <button class="outline" data-round-edit="${r.id}">✏️ 編集</button>
           <button class="outline" data-round-doc="${r.id}">📄 Word</button>
         </td>
@@ -3289,20 +3292,66 @@ function renderRoundTable(gs) {
       selectedRoundId = (selectedRoundId === btn.dataset.round) ? null : btn.dataset.round;
       renderRoundTable(gs);
       renderPdfPins(gs);
-      // 図面はこの表のすぐ上にあるので、反映結果が見えるようスクロールを戻す
-      if (selectedRoundId) document.getElementById('pdfCanvasHolder').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 選んだ回の内容ボックスが見えるようスクロールする
+      if (selectedRoundId) document.getElementById('roundSummaryBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
   wrap.querySelectorAll('button[data-round-edit]').forEach(btn => {
     btn.addEventListener('click', () => {
       // 図面にもこの回を表示してから、下のフォームへ内容を呼び出す
       selectedRoundId = btn.dataset.roundEdit;
+      renderRoundTable(gs);
       renderPdfPins(gs);
       editRecord(gs, btn.dataset.roundEdit);
     });
   });
   wrap.querySelectorAll('button[data-round-doc]').forEach(btn => {
     btn.addEventListener('click', () => exportRoundDoc(gs, btn.dataset.roundDoc));
+  });
+  renderRoundSummary(gs);
+}
+
+// 選択中の回の内容（実施日・状態・作業項目・金額）をまとめて表示する
+function renderRoundSummary(gs) {
+  const box = document.getElementById('roundSummaryBox');
+  if (!box) return;
+  const r = selectedRoundId ? (gs.records || []).find(x => x.id === selectedRoundId) : null;
+  if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  normalizeItemBudgets(r);
+  const items = r.items || [];
+  const total = items.reduce((s, it) => s + Number(it.cost || 0), 0);
+  const rowsHtml = items.length ? items.map(it => {
+    const t = it.subType ? `${it.type}(${it.subType})` : it.type;
+    const q = it.qty != null ? `${it.qty}${it.unit || ''}` : '';
+    let targetNames = '';
+    if (it.workRefs && it.workRefs.length) {
+      const names = it.workRefs.map(ref => {
+        const tree = gs.treeMarkers && gs.treeMarkers.find(x => x.id === ref.treeId);
+        return tree ? tree.label : null;
+      }).filter(Boolean);
+      if (names.length) targetNames = ` [${names.join('・')}]`;
+    }
+    return `<div class="budget-cat-record-row">
+      <span>${escapeHtml(t || '-')}${q ? ' ' + escapeHtml(q) : ''}${escapeHtml(targetNames)}</span>
+      ${it.envTax ? '<span class="env-tax-badge">🌲 環境譲与税</span>' : ''}
+      <span>${escapeHtml(it.budgetCategory || '-')}</span>
+      <span class="brow-cost">¥${Number(it.cost || 0).toLocaleString()}</span>
+    </div>`;
+  }).join('') : '<div class="empty-msg">この回の作業項目はまだありません</div>';
+  box.style.cssText = 'display:block; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:10px 12px; margin-top:10px;';
+  box.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+      <b>📌 選択中の回：${escapeHtml(r.date || '日付未定')}</b>
+      <span class="status-badge">${escapeHtml(r.status || '-')}</span>
+      <span style="margin-left:auto; font-weight:bold;">合計 ¥${total.toLocaleString()}</span>
+      <button class="outline" id="btnRoundSummaryClose" style="min-height:0; padding:3px 10px; font-size:12px;">✕ 選択解除</button>
+    </div>
+    ${rowsHtml}
+    <small class="help" style="display:block; margin-top:6px;">下の図面には、この回の対象（伐採・剪定の木、草刈りエリア）だけが表示されています。</small>`;
+  document.getElementById('btnRoundSummaryClose').addEventListener('click', () => {
+    selectedRoundId = null;
+    renderRoundTable(gs);
+    renderPdfPins(gs);
   });
 }
 
