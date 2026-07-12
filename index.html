@@ -871,7 +871,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版12f</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版12g</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12f</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12g</p>
   </div>
 </div>
 
@@ -988,7 +988,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12f</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12g</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1007,6 +1007,7 @@
   <h3 style="margin-top:14px;">🗂️ 作業回の一覧（<span id="roundYearLabel">-</span>年度）</h3>
   <small class="help">「📍 この回を表示」を押すと、すぐ下にその回の作業内容と、対象の木・草刈りエリアだけを表示した図面が出ます。「✏️ 編集」で内容を修正できます。</small>
   <div id="roundTableWrap" style="margin-top:8px;"></div>
+  <button class="outline" id="btnRoundFromPlan" style="width:100%; margin-top:8px;">📋 図面の内容から回を作成（未対応の伐採・剪定・草刈りをまとめて1回に）</button>
 
   <div id="roundSummaryBox" style="display:none;"></div>
 
@@ -3315,6 +3316,74 @@ function renderRoundTable(gs) {
   });
   renderRoundSummary(gs);
 }
+
+// 図面に登録した未対応の伐採・剪定・草刈りを、そのまま1回分の作業記録として保存する
+// （図面の内容＝保全作業の内容。フォームへの入力し直しを不要にする）
+function createRoundFromPlan(gs) {
+  const items = [];
+  ['伐採', '剪定'].forEach(type => {
+    const cands = collectPickableWorks(gs, type).filter(c => !c.done);
+    if (!cands.length) return;
+    // 予算ごとにまとめて1項目にする（予算集計が項目単位のため）
+    const byCat = {};
+    cands.forEach(c => {
+      const cat = c.budgetCategory || budgetCategories[0] || '通常予算';
+      (byCat[cat] = byCat[cat] || []).push(c);
+    });
+    Object.entries(byCat).forEach(([cat, list]) => {
+      items.push({
+        id: uid(), type, subType: '',
+        qty: list.length, unit: '本',
+        cost: list.reduce((s, c) => s + Number(c.amount || 0), 0),
+        budgetCategory: cat, envTax: false,
+        workRefs: list.map(c => ({ treeId: c.treeId, workId: c.workId })),
+        areaRefs: null,
+      });
+    });
+  });
+  const areas = collectAllPickableMowAreas(gs);
+  if (areas.length) {
+    const byCat = {};
+    areas.forEach(a => {
+      const cat = a.budgetCategory || budgetCategories[0] || '通常予算';
+      (byCat[cat] = byCat[cat] || []).push(a);
+    });
+    Object.entries(byCat).forEach(([cat, list]) => {
+      const sqm = list.reduce((s, a) => s + (a.sqm != null ? Number(a.sqm) : 0), 0);
+      items.push({
+        id: uid(), type: '草刈り', subType: '',
+        qty: sqm > 0 ? sqm : null, unit: '㎡',
+        cost: list.reduce((s, a) => s + Number(a.amount || 0), 0),
+        budgetCategory: cat, envTax: false,
+        workRefs: null,
+        areaRefs: list.map(a => a.id),
+      });
+    });
+  }
+  if (!items.length) {
+    alert('図面に未対応の伐採・剪定・草刈りエリアがありません。\n先に「📄 緑地詳細図」で木や草刈りエリアを登録してください。');
+    return;
+  }
+  const total = items.reduce((s, it) => s + Number(it.cost || 0), 0);
+  const summary = items.map(it =>
+    `・${it.type}${it.qty ? ` ${it.qty}${it.unit}` : ''}　¥${Number(it.cost).toLocaleString()}（${it.budgetCategory}）`
+  ).join('\n');
+  if (!confirm(`図面の未対応分を、1回分の作業として保存します:\n\n${summary}\n合計 ¥${total.toLocaleString()}\n\n実施日は今日の日付で保存されます（保存後に「✏️ 編集」で日付や内容を変更できます）。よろしいですか？`)) return;
+
+  // 記録フォームに内容をセットして、通常の保存処理をそのまま通す（消し込み等も同じ挙動になる）
+  resetRecordForm();
+  currentItems = items;
+  renderItemListWrap();
+  const d = new Date();
+  document.getElementById('recDate').value =
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  document.getElementById('btnAddRecord').click();
+}
+
+document.getElementById('btnRoundFromPlan').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (gs) createRoundFromPlan(gs);
+});
 
 // 選択中の回の内容（実施日・状態・作業項目・金額）をまとめて表示する
 function renderRoundSummary(gs) {
