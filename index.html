@@ -891,7 +891,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12b</p>
   </div>
 </div>
 
@@ -988,8 +988,11 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12a</span></button>
-  <h2 id="detailName">緑地名</h2>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12b</span></button>
+  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <h2 id="detailName" style="margin:0;">緑地名</h2>
+    <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
+  </div>
 
   <div class="year-bar">
     <div class="year-bar-current">📅 <span id="yearBarLabel">-</span>年度 <span class="year-bar-note">を表示・編集中</span></div>
@@ -2634,6 +2637,19 @@ document.getElementById('btnCloseDetail').addEventListener('click', closeDetailP
 document.getElementById('drawerCloseBar').addEventListener('click', closeDetailPanel);
 // 起動直後は必ずパネルを閉じた状態にする（何らかの理由で開いたまま起動する端末があったため）
 closeDetailPanel();
+
+// 緑地名の横の「✏️ 名前変更」: その場で変更できるショートカット
+document.getElementById('btnRenameGreen').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  const name = prompt('緑地名を変更してください', gs.name);
+  if (!name || !name.trim() || name.trim() === gs.name) return;
+  gs.name = name.trim();
+  save();
+  document.getElementById('detailName').textContent = gs.name;
+  document.getElementById('editName').value = gs.name;
+  renderAll();
+});
 
 document.getElementById('btnSaveInfo').addEventListener('click', () => {
   const gs = getGreen(currentId);
