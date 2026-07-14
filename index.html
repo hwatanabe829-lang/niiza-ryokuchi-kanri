@@ -130,6 +130,15 @@
     cursor: pointer;
     display: block;
   }
+  .photo-thumb-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .photo-thumb-item { position: relative; }
+  .photo-thumb-item .photo-thumb { margin-top: 0; }
+  .photo-thumb-del {
+    position: absolute; top: -6px; right: -6px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--red, #c62828); color: #fff; border: none;
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+  }
   .close-btn {
     position: absolute;
     top: 12px; right: 12px;
@@ -1004,8 +1013,8 @@
     <small class="help" style="margin-top:2px;">敷地図・木のデータは年度をまたいで引き継がれます。予算・作業記録・草刈りチェックは、ここで選んだ年度のものが表示されます。</small>
   </div>
 
-  <h3 style="margin-top:14px;">🗂️ 作業回の一覧（<span id="roundYearLabel">-</span>年度）</h3>
-  <small class="help">「📍 この回を表示」を押すと、すぐ下にその回の作業内容と、対象の木・草刈りエリアだけを表示した図面が出ます。「✏️ 編集」で内容を修正できます。</small>
+  <h3 style="margin-top:14px;">🗂️ 発注の一覧（<span id="roundYearLabel">-</span>年度）</h3>
+  <small class="help">この緑地の発注（今回発注・1回目・2回目…）が並びます。「📍 この発注の図面を見る」を押すと、その発注に含まれる剪定・伐採・草刈りだけを描いた図面と内容が下に出ます。「✏️ 編集」で内容を修正できます。</small>
   <div id="roundTableWrap" style="margin-top:8px;"></div>
   <div id="roundSummaryBox" style="display:none;"></div>
 
@@ -1040,9 +1049,9 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3 id="recordFormHeading">💾 この回を保存（<span id="recordYearLabel">-</span>年度）</h3>
-  <small class="help">図面（上の「📄緑地詳細図」）に描いた未対応の<b>剪定・伐採・草刈り</b>は、保存時に自動でこの回に含まれます。<b>清掃・点検</b>など図面に描かない作業だけ、下で追加してください。</small>
-  <div class="editing-banner" id="editingBanner">✏️ この回を編集中です（保存すると上書きされます）</div>
+  <h3 id="recordFormHeading">💾 この発注を保存（<span id="recordYearLabel">-</span>年度）</h3>
+  <small class="help">1回の発注に含める<b>剪定・伐採・草刈り</b>を図面（上の「📄緑地詳細図」）に描いておくと、保存時に自動でこの発注にまとまります。<b>清掃・点検</b>など図面に描かない作業だけ、下で追加してください。</small>
+  <div class="editing-banner" id="editingBanner">✏️ この発注を編集中です（保存すると上書きされます）</div>
   <div class="field" style="margin-top:8px;"><label>実施日</label><input type="date" id="recDate"></div>
 
   <h4>その他の作業を追加（任意・清掃や点検など）</h4>
@@ -1074,21 +1083,21 @@
     </div>
     <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
     <div class="field">
-      <label>作業前の写真</label>
-      <input type="file" id="recPhoto" accept="image/*">
-      <img id="recPhotoPreview" class="photo-thumb" style="display:none;">
+      <label>写真（3枚まで）</label>
+      <input type="file" id="recPhoto" accept="image/*" multiple>
+      <div id="recPhotoPreviews" class="photo-thumb-row"></div>
     </div>
   </details>
 
-  <button id="btnSaveRound" style="margin-top:10px; width:100%;">💾 この回を保存（図面の内容＋その他）</button>
-  <button id="btnAddRecord" style="margin-top:10px; width:100%; display:none;">💾 この回を上書き保存</button>
+  <button id="btnSaveRound" style="margin-top:10px; width:100%;">💾 この発注を保存（図面の内容＋その他）</button>
+  <button id="btnAddRecord" style="margin-top:10px; width:100%; display:none;">💾 この発注を上書き保存</button>
   <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>🌳 伐採・剪定予定の木</h3>
   <div id="treeMarkerList"></div>
-  <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます。樹径・状況写真・剪定の強弱・見積額を記録でき、1本の木に何度でも作業履歴（伐採・剪定）を追加できます。ここに登録した未対応の作業は「💾 この回を保存」で自動的にその回に含まれます。選択中の年度以外の日付の作業には年度バッジが付きます。</small>
+  <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます。樹径・状況写真・剪定の強弱・見積額を記録できます。ここに登録した未対応の作業は「💾 この発注を保存」で自動的にその発注に含まれます。選択中の年度以外の日付の作業には年度バッジが付きます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -1302,12 +1311,17 @@ function serializeGreen(gs) {
   if (gs.pdf && !gs.pdfPhotoId) {
     if (gs.pdf.length <= MAX_PHOTO_CHARS) gs.pdfPhotoId = registerPhoto(gs, gs.pdf);
   }
-  (gs.records || []).forEach(r => { if (r.photo && !r.photoId) r.photoId = registerPhoto(gs, r.photo); });
   (gs.treeMarkers || []).forEach(t => { if (t.photo && !t.photoId) t.photoId = registerPhoto(gs, t.photo); });
+  // 発注の写真: photoIdsが無い(バックアップ復元直後など)場合、dataURL配列から登録し直す
+  (gs.records || []).forEach(r => {
+    if (r.photos && r.photos.length && (!r.photoIds || r.photoIds.length !== r.photos.length)) {
+      r.photoIds = r.photos.map(dataUrl => registerPhoto(gs, dataUrl));
+    }
+  });
 
   const clone = JSON.parse(JSON.stringify(gs, (k, v) => (typeof k === 'string' && k.startsWith('__')) ? undefined : v));
   delete clone.pdf; // 本体ドキュメントには画像を含めない（pdfPhotoId経由で復元）
-  (clone.records || []).forEach(r => { delete r.photo; });
+  (clone.records || []).forEach(r => { delete r.photo; delete r.photos; });
   (clone.treeMarkers || []).forEach(t => { delete t.photo; });
   return clone;
 }
@@ -1391,7 +1405,11 @@ async function loadPhotosForGreen(gs) {
     snap.forEach(d => { map[d.id] = d.data().dataUrl; });
     gs.__photos = map;
     if (gs.pdfPhotoId && map[gs.pdfPhotoId]) gs.pdf = map[gs.pdfPhotoId];
-    (gs.records || []).forEach(r => { if (r.photoId && map[r.photoId]) r.photo = map[r.photoId]; });
+    (gs.records || []).forEach(r => {
+      // 旧データ(単一photo/photoId)は配列へ変換して読み込む
+      if (!r.photoIds && r.photoId) r.photoIds = [r.photoId];
+      r.photos = (r.photoIds || []).map(id => map[id]).filter(Boolean);
+    });
     (gs.treeMarkers || []).forEach(t => { if (t.photoId && map[t.photoId]) t.photo = map[t.photoId]; });
   } catch {
     gs.__photosLoaded = false; // 次回開いたとき再試行
@@ -1492,7 +1510,7 @@ function updateStorageMeter() {
   const el = document.getElementById('storageMeter');
   if (!el) return;
   const photoCount = data.reduce((s, gs) =>
-    s + (gs.records || []).filter(r => r.photoId || r.photo).length
+    s + (gs.records || []).reduce((s2, r) => s2 + (r.photoIds ? r.photoIds.length : (r.photoId ? 1 : 0)), 0)
       + (gs.treeMarkers || []).filter(t => t.photoId || t.photo).length, 0);
   el.innerHTML = `<div style="font-size:12px; color:#555;">☁️ データはクラウドに保存され、全職員で共有されます（緑地${data.length}件・写真${photoCount}枚）</div>`;
 }
@@ -1634,7 +1652,7 @@ document.getElementById('backupImportInput').addEventListener('change', (e) => {
       for (const gs of data) {
         gs.__photosLoaded = true; // バックアップは写真込み
         gs.pdfPhotoId = null;     // 写真ドキュメントは作り直す
-        (gs.records || []).forEach(r => { r.photoId = null; });
+        (gs.records || []).forEach(r => { r.photoId = null; r.photoIds = null; });
         (gs.treeMarkers || []).forEach(t => { t.photoId = null; });
         await writeGreen(gs);
       }
@@ -1890,10 +1908,6 @@ function renderTreeMarkerList(gs) {
             <button class="danger" data-del-work="${t.id}|${w.id}">削除</button>
           </div>
         `).join('') || '<div class="empty-msg">作業履歴はまだありません</div>'}
-      </div>
-      <div class="row2">
-        <button class="outline" data-add-work="${t.id}|伐採">🪓 伐採の作業を追加</button>
-        <button class="outline" data-add-work="${t.id}|剪定">✂️ 剪定の作業を追加</button>
       </div>
     </div>
   `).join('');
@@ -2983,14 +2997,35 @@ function renderBudgetCard(gs) {
 }
 
 // ---- Records ----
+// 発注の写真は最大3枚。currentRecordPhotos は {dataUrl, photoId(既存分のみ)} の配列。
+const MAX_RECORD_PHOTOS = 3;
+let currentRecordPhotos = [];
+
+function renderRecordPhotoPreviews() {
+  const wrap = document.getElementById('recPhotoPreviews');
+  wrap.innerHTML = currentRecordPhotos.map((p, i) => `
+    <div class="photo-thumb-item">
+      <img class="photo-thumb" src="${p.dataUrl}">
+      <button type="button" class="photo-thumb-del" data-photo-idx="${i}">✕</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-photo-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRecordPhotos.splice(Number(btn.dataset.photoIdx), 1);
+      renderRecordPhotoPreviews();
+    });
+  });
+  document.getElementById('recPhoto').disabled = currentRecordPhotos.length >= MAX_RECORD_PHOTOS;
+}
+
 document.getElementById('recPhoto').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  resizePhoto(file, (dataUrl) => {
-    const img = document.getElementById('recPhotoPreview');
-    img.src = dataUrl;
-    img.style.display = 'block';
-    delete img.dataset.photoId; // 新しい写真＝まだクラウド未登録
+  const files = Array.from(e.target.files || []).slice(0, MAX_RECORD_PHOTOS - currentRecordPhotos.length);
+  e.target.value = '';
+  files.forEach(file => {
+    resizePhoto(file, (dataUrl) => {
+      currentRecordPhotos.push({ dataUrl, photoId: null });
+      renderRecordPhotoPreviews();
+    });
   });
 });
 
@@ -3074,19 +3109,18 @@ function resetRecordForm() {
   editingRecordId = null;
   currentItems = [];
   document.getElementById('editingBanner').style.display = 'none';
-  // 新規保存モード: 「この回を保存」を表示、上書き保存とキャンセルは隠す
+  // 新規保存モード: 「この発注を保存」を表示、上書き保存とキャンセルは隠す
   const saveRoundBtn = document.getElementById('btnSaveRound');
   if (saveRoundBtn) saveRoundBtn.style.display = '';
   document.getElementById('btnAddRecord').style.display = 'none';
-  document.getElementById('btnAddRecord').textContent = '💾 この回を上書き保存';
+  document.getElementById('btnAddRecord').textContent = '💾 この発注を上書き保存';
   document.getElementById('btnCancelEdit').style.display = 'none';
   document.getElementById('recDate').value = '';
   document.getElementById('itemEnvTax').checked = false;
   document.getElementById('itemEnvTaxInfo').style.display = 'none';
   document.getElementById('recPhoto').value = '';
-  document.getElementById('recPhotoPreview').style.display = 'none';
-  document.getElementById('recPhotoPreview').src = '';
-  delete document.getElementById('recPhotoPreview').dataset.photoId;
+  currentRecordPhotos = [];
+  renderRecordPhotoPreviews();
   document.getElementById('recDetailsMore').open = false;
   document.getElementById('itemCost').value = '';
   renderRecTypeSelect();
@@ -3137,10 +3171,9 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   const status = document.getElementById('recStatus').value;
   const inputBy = document.getElementById('recInputBy').value;
   const contractor = document.getElementById('recContractor').value;
-  const photoImg = document.getElementById('recPhotoPreview');
-  const photo = photoImg.style.display !== 'none' ? photoImg.src : '';
-  let photoId = photoImg.dataset.photoId || null;
-  if (photo && !photoId) photoId = registerPhoto(gs, photo);
+  // 新規に選んだ写真（photoIdなし）はここで登録し、既存分と合わせてID配列にする
+  const photoIds = currentRecordPhotos.map(p => p.photoId || registerPhoto(gs, p.dataUrl));
+  const photos = currentRecordPhotos.map(p => p.dataUrl);
 
   if (!date || currentItems.length === 0) {
     alert('実施日と、少なくとも1件の作業項目は必須です');
@@ -3159,15 +3192,15 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
       r.inputBy = inputBy;
       r.contractor = contractor; r.envTax = envTax; r.budgetCategory = budgetCategory;
       r.items = currentItems.slice(); r.cost = cost;
-      if (photo) { r.photo = photo; r.photoId = photoId; }
+      r.photoIds = photoIds; r.photos = photos;
       recordId = r.id;
     }
   } else {
     recordId = uid();
     gs.records.push({
       id: recordId, year: gs.selectedYear, date, status,
-      inputBy, contractor, envTax, budgetCategory,
-      items: currentItems.slice(), cost, photo, photoId
+      inputBy, contractor, envTax, budgetCategory, photoIds, photos,
+      items: currentItems.slice(), cost
     });
   }
   // Claim the map-plotted trees / mow areas this record's items draw on
@@ -3222,7 +3255,7 @@ function editRecord(gs, recId) {
   const saveRoundBtn = document.getElementById('btnSaveRound');
   if (saveRoundBtn) saveRoundBtn.style.display = 'none';
   document.getElementById('btnAddRecord').style.display = '';
-  document.getElementById('btnAddRecord').textContent = '💾 この回を上書き保存';
+  document.getElementById('btnAddRecord').textContent = '💾 この発注を上書き保存';
   document.getElementById('btnCancelEdit').style.display = 'inline-block';
   document.getElementById('recDate').value = r.date;
   renderRecStatusSelect(); document.getElementById('recStatus').value = r.status || statuses[0];
@@ -3233,9 +3266,10 @@ function editRecord(gs, recId) {
   updateRecEnvTaxInfo();
   currentItems = (r.items || []).map(it => ({ ...it }));
   renderItemListWrap();
-  const img = document.getElementById('recPhotoPreview');
-  if (r.photo) { img.src = r.photo; img.style.display = 'block'; img.dataset.photoId = r.photoId || ''; }
-  else { img.style.display = 'none'; img.src = ''; delete img.dataset.photoId; }
+  const existingIds = r.photoIds || (r.photoId ? [r.photoId] : []);
+  const existingUrls = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
+  currentRecordPhotos = existingUrls.map((dataUrl, i) => ({ dataUrl, photoId: existingIds[i] || null }));
+  renderRecordPhotoPreviews();
   renderBudgetCard(gs);
   renderRecordTable(gs);
   document.getElementById('recDate').scrollIntoView({behavior:'smooth', block:'center'});
@@ -3280,7 +3314,7 @@ function sortRoundsForDisplay(records) {
   return sorted.map(r => {
     if (r.status === FINAL_STATUS) return { ...r, seqLabel: '', seqClass: '' };
     pendingSeq++;
-    const seqLabel = pendingSeq === 1 ? '今回' : (pendingSeq === 2 ? '次回' : `${pendingSeq}回目予定`);
+    const seqLabel = pendingSeq === 1 ? '今回発注' : (pendingSeq === 2 ? '次回発注' : `${pendingSeq}回目発注予定`);
     const seqClass = pendingSeq === 1 ? 'current' : (pendingSeq === 2 ? 'next' : 'later');
     return { ...r, seqLabel, seqClass };
   });
@@ -3290,19 +3324,19 @@ function renderRoundTable(gs) {
   document.getElementById('roundYearLabel').textContent = gs.selectedYear;
   const records = gs.records.filter(r => String(r.year) === String(gs.selectedYear));
   if (records.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">この年度の作業記録はまだありません。下の「保全作業記録の追加」から1回分ずつ登録できます。</div>';
+    wrap.innerHTML = '<div class="empty-msg">この年度の発注はまだありません。下の「💾 この発注を保存」から1件ずつ登録できます。</div>';
     renderRoundSummary(gs);
     return;
   }
   const rounds = sortRoundsForDisplay(records);
-  // 実施日順に「1回目・2回目…」の通し番号を振る（日付未定は最後）
+  // 実施日順に「1回目の発注・2回目の発注…」の通し番号を振る（日付未定は最後）
   const numbered = records.slice().sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
   const roundNo = {};
   numbered.forEach((r, i) => { roundNo[r.id] = i + 1; });
-  wrap.innerHTML = `<table><tr><th>回</th><th></th><th>実施日</th><th>内容</th><th>見積額</th><th>予算</th><th>状態</th><th></th></tr>` +
+  wrap.innerHTML = `<table><tr><th>発注</th><th></th><th>実施日</th><th>内容</th><th>見積額</th><th>予算</th><th>状態</th><th></th></tr>` +
     rounds.map(r => `
       <tr class="${r.id === selectedRoundId ? 'row-complete' : ''}">
-        <td><b>${roundNo[r.id]}回目</b></td>
+        <td><b>${roundNo[r.id]}回目の発注</b></td>
         <td>${r.seqLabel ? `<span class="seq-badge ${r.seqClass}">${r.seqLabel}</span>` : ''}</td>
         <td>${escapeHtml(r.date || '-')}</td>
         <td>${roundItemsSummary(gs, r)}</td>
@@ -3310,7 +3344,7 @@ function renderRoundTable(gs) {
         <td>${escapeHtml(recordBudgetSummary(r))}${recordHasEnvTax(r) ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
         <td>${escapeHtml(r.status || '-')}</td>
         <td>
-          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : '📍 この回を表示'}</button>
+          <button class="${r.id === selectedRoundId ? '' : 'outline'}" data-round="${r.id}">${r.id === selectedRoundId ? '表示中 ✕' : '📍 この発注の図面を見る'}</button>
           <button class="outline" data-round-edit="${r.id}">✏️ 編集</button>
           <button class="outline" data-round-doc="${r.id}">📄 Word</button>
         </td>
@@ -3389,12 +3423,12 @@ function collectMapItems(gs) {
   return items;
 }
 
-// 「💾 この回を保存」: 図面の未対応分 ＋ 下で追加した「その他の作業」を1回にまとめて保存する
+// 「💾 この発注を保存」: 図面の未対応分 ＋ 下で追加した「その他の作業」を1件の発注にまとめて保存する
 function saveRoundFromPlanAndOther(gs) {
   const otherItems = currentItems.slice(); // 下で手入力した清掃・点検などのその他作業
   const items = [...collectMapItems(gs), ...otherItems];
   if (!items.length) {
-    alert('この回に含める作業がありません。\n図面（上の「📄緑地詳細図」）に剪定・草刈り等を描くか、下の「その他の作業を追加」で清掃・点検などを追加してください。');
+    alert('この発注に含める作業がありません。\n図面（上の「📄緑地詳細図」）に剪定・伐採・草刈り等を描くか、下の「その他の作業を追加」で清掃・点検などを追加してください。');
     return;
   }
   const dateEl = document.getElementById('recDate');
@@ -3406,7 +3440,7 @@ function saveRoundFromPlanAndOther(gs) {
   const summary = items.map(it =>
     `・${it.type}${it.subType ? `(${it.subType})` : ''}${it.qty ? ` ${it.qty}${it.unit}` : ''}　¥${Number(it.cost).toLocaleString()}（${it.budgetCategory}）`
   ).join('\n');
-  if (!confirm(`この回を保存します（実施日: ${dateEl.value}）:\n\n${summary}\n合計 ¥${total.toLocaleString()}\n\nよろしいですか？（保存後に「✏️ 編集」で変更できます）`)) return;
+  if (!confirm(`この発注を保存します（実施日: ${dateEl.value}）:\n\n${summary}\n合計 ¥${total.toLocaleString()}\n\nよろしいですか？（保存後に「✏️ 編集」で変更できます）`)) return;
 
   // 既存の保存エンジン(btnAddRecord)をそのまま通す（見積の消し込み等も同一挙動）
   currentItems = items;
@@ -3419,14 +3453,14 @@ document.getElementById('btnSaveRound').addEventListener('click', () => {
   if (gs) saveRoundFromPlanAndOther(gs);
 });
 
-// 選択中の回の内容（実施日・状態・作業項目・金額）をまとめて表示する
+// 選択中の発注の内容（実施日・状態・作業項目・金額）をまとめて表示する
 function renderRoundSummary(gs) {
   const box = document.getElementById('roundSummaryBox');
   if (!box) return;
   const r = selectedRoundId ? (gs.records || []).find(x => x.id === selectedRoundId) : null;
   if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
   normalizeItemBudgets(r);
-  // 「N回目」の通し番号（作業回の表と同じ数え方: 同年度内で実施日順）
+  // 「N回目の発注」の通し番号（発注の一覧表と同じ数え方: 同年度内で実施日順）
   const yearRecords = (gs.records || []).filter(x => String(x.year) === String(r.year))
     .sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
   const roundNo = yearRecords.findIndex(x => x.id === r.id) + 1;
@@ -3449,17 +3483,17 @@ function renderRoundSummary(gs) {
       <span>${escapeHtml(it.budgetCategory || '-')}</span>
       <span class="brow-cost">¥${Number(it.cost || 0).toLocaleString()}</span>
     </div>`;
-  }).join('') : '<div class="empty-msg">この回の作業項目はまだありません</div>';
+  }).join('') : '<div class="empty-msg">この発注の作業項目はまだありません</div>';
   box.style.cssText = 'display:block; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:10px 12px; margin-top:10px;';
   box.innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-      <b>📌 ${roundNo}回目（${escapeHtml(r.date || '日付未定')}）</b>
+      <b>📌 ${roundNo}回目の発注（${escapeHtml(r.date || '日付未定')}）</b>
       <span class="status-badge">${escapeHtml(r.status || '-')}</span>
       <span style="margin-left:auto; font-weight:bold;">合計 ¥${total.toLocaleString()}</span>
       <button class="outline" id="btnRoundSummaryClose" style="min-height:0; padding:3px 10px; font-size:12px;">✕ 選択解除</button>
     </div>
     ${rowsHtml}
-    <small class="help" style="display:block; margin-top:6px;">下の図面には、この回の対象（伐採・剪定の木、草刈りエリア）だけが表示されています。</small>`;
+    <small class="help" style="display:block; margin-top:6px;">下の図面には、この発注の対象（伐採・剪定の木、草刈りエリア）だけが表示されています。</small>`;
   document.getElementById('btnRoundSummaryClose').addEventListener('click', () => {
     selectedRoundId = null;
     renderRoundTable(gs);
@@ -3556,7 +3590,7 @@ function exportRoundDoc(gs, recordId) {
 
   const tableStyle = 'border-collapse:collapse; width:100%; font-size:10.5pt;';
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><title>作業内容書</title>
+<head><meta charset="utf-8"><title>発注内容書</title>
 <style>
   body { font-family: "Yu Gothic", "MS Gothic", sans-serif; font-size: 11pt; }
   h1 { font-size: 16pt; border-bottom: 2px solid #2e7d32; color: #1b5e20; padding-bottom: 4px; }
@@ -3566,7 +3600,7 @@ function exportRoundDoc(gs, recordId) {
   th, td { padding: 3pt 5pt; }
 </style></head>
 <body>
-<h1>🌳 緑地保全作業 内容書</h1>
+<h1>🌳 緑地保全作業 発注内容書</h1>
 <table style="${tableStyle}">
   <tr><th style="width:25%;">緑地名</th><td>${e(gs.name)}</td></tr>
   <tr><th>年度</th><td>${e(r.year)}年度</td></tr>
@@ -3675,7 +3709,7 @@ function renderRecordTable(gs) {
         <td>${escapeHtml(r.contractor || '-')}</td>
         <td>${escapeHtml(r.inputBy || '-')}</td>
         <td>¥${Number(r.cost).toLocaleString()}</td>
-        <td>${r.photo ? `<img class="photo-thumb" src="${r.photo}" data-id="${r.id}">` : '-'}</td>
+        <td>${(r.photos && r.photos.length) ? r.photos.map(p => `<img class="photo-thumb" src="${p}" data-id="${r.id}">`).join('') : '-'}</td>
         <td>
           <button class="outline" data-edit="${r.id}">編集</button>
           <button class="danger" data-del="${r.id}">削除</button>
