@@ -880,7 +880,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版12h</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16a</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -900,7 +900,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-12h</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-16a</p>
   </div>
 </div>
 
@@ -972,6 +972,12 @@
       <small class="help">✏️で予算名を変更できます（登録済みの作業・木・予算額も新しい名前に引き継がれます）。※環境譲与税予算はここではなく、上の「🌲 環境譲与税 予算」欄で別会計として管理します。</small>
     </div>
     <div class="panel-section">
+      <h2>💴 単価表（単価契約）</h2>
+      <small class="help">年度ごとの契約単価を登録すると、木の幹周・草刈りの面積から<b>見積額が自動計算</b>されます。</small>
+      <button id="btnOpenUnitPrices" style="width:100%; margin-top:8px;">💴 単価表を開く・編集する</button>
+      <small class="help" id="unitPriceStatus" style="margin-top:4px; display:block;"></small>
+    </div>
+    <div class="panel-section">
       <h2>💾 データのバックアップ</h2>
       <small class="help">データはクラウドに保存され全職員で共有されます。ここでのファイル保存は、誤操作からの復旧や年度末の控えのための保険です。</small>
       <div id="storageMeter" style="margin:8px 0;"></div>
@@ -997,7 +1003,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v12h</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16a</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1166,6 +1172,27 @@
   </div>
 </div>
 
+<!-- 単価表（単価契約）の編集オーバーレイ -->
+<div id="unitPriceOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; align-items:flex-start; justify-content:center; overflow-y:auto; padding:30px 16px;">
+  <div style="background:white; border-radius:10px; padding:20px; max-width:1100px; width:100%;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h2 style="margin:0; color:var(--green);">💴 単価表（単価契約）</h2>
+      <button class="close-btn" id="btnCloseUnitPrices" style="position:static; font-size:20px;">✕</button>
+    </div>
+    <small class="help">
+      木の<b>幹周 c（cm）</b>と剪定の強弱・落葉/常緑、伐採の人力/チェーンソー、草刈りの<b>面積(㎡)</b>と工法から、見積額を自動計算します。
+      単価は年度ごとに保存され、全職員で共有されます。
+    </small>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;">
+      <label style="font-size:0.9rem;">対象年度 <select id="unitPriceYearSelect" style="padding:6px;"></select></label>
+      <button class="outline" id="btnLoadR8Prices">📄 令和8年度の契約単価を読み込む</button>
+      <button class="outline" id="btnCopyPrevYearPrices">前年度からコピー</button>
+      <button id="btnRecalcAllAmounts" style="margin-left:auto;">🧮 この単価で全緑地の見積額を一括計算</button>
+    </div>
+    <div id="unitPriceTables"></div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
@@ -1198,6 +1225,7 @@ const BUDCAT_KEY = 'niiza_green_budgetcategories_v1';
 const PEOPLE_KEY = 'niiza_green_people_v1';
 const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
 const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
+const UNITPRICE_KEY = 'niiza_unit_prices_v1';
 const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
 const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了', '施工書類受け取り済み', '請求書処理済み'];
 const FINAL_STATUS = '請求書処理済み'; // 完了の定義＝請求書処理まで完了したこと
@@ -1216,6 +1244,100 @@ let peopleList = [];
 let contractorList = [];
 let envTaxBudgets = {};
 let envTaxSelectedYear = new Date().getFullYear();
+
+// ============================================================
+// 単価表（単価契約）: 年度ごとに保存し、幹周・面積から見積額を自動計算する
+// ============================================================
+let unitPrices = {}; // { [year]: { prune:{strong:{落葉樹:[],常緑樹:[]},weak:{...}}, fell:{人力:[],チェーンソー:[]}, mow:{工法:単価} } }
+
+// 幹周 c（cm）の区分上限（未満）。契約書の区分に対応
+const PRUNE_CLASSES_STRONG = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+const PRUNE_CLASSES_WEAK   = [15, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+const FELL_CLASSES         = [20, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+const FOLIAGE_KINDS = ['落葉樹', '常緑樹'];
+const FELL_METHODS  = ['人力', 'チェーンソー'];
+const MOW_METHODS   = ['人力除草', '機械除草Ⅰ（肩掛け式）', '機械除草Ⅱ（ハンドガイド式）', '芝刈り込み'];
+const DEFAULT_MOW_METHOD = '機械除草Ⅰ（肩掛け式）';
+
+// 令和8年度 契約単価（R8単価表PDFより。単位:円、銭あり）
+const R8_UNIT_PRICES = {
+  prune: {
+    strong: { // 高木基本剪定（=強剪定）
+      '落葉樹': [4796, 9603, 17732, 41503, 74470, 122556.5, 180345, 243347.5, 315535, 388597],
+      '常緑樹': [10406, 15681.6, 26059, 41503, 74470, 122556.5, 176000, 234300, 297440, 365794],
+    },
+    weak: { // 高木軽剪定（=弱剪定）
+      '落葉樹': [1062.6, 3080, 6222.7, 12837, 28039, 48224, 78584, 126621, 172447, 227414, 283140],
+      '常緑樹': [2799.5, 6732, 10725, 17446, 28226, 48257, 79200, 124190, 167706, 215490, 267740],
+    },
+  },
+  fell: { // 樹木伐採
+    '人力': [3080, 6255.7, 22044, 46346.3, null, null, null, null, null, null, null],
+    'チェーンソー': [2940.3, 6076.4, 20878, 43593, 73953, 374110, 501930, 631290, 752070, 880000, 1013100],
+  },
+  mow: { // 除草・草刈り（円/㎡）
+    '人力除草': 375.1,
+    '機械除草Ⅰ（肩掛け式）': 136.4,
+    '機械除草Ⅱ（ハンドガイド式）': 99,
+    '芝刈り込み': 49.5,
+  },
+};
+
+// 空の単価表（全クラスnull）を作る
+function emptyUnitPriceTable() {
+  const nulls = n => Array(n).fill(null);
+  return {
+    prune: {
+      strong: { '落葉樹': nulls(PRUNE_CLASSES_STRONG.length), '常緑樹': nulls(PRUNE_CLASSES_STRONG.length) },
+      weak:   { '落葉樹': nulls(PRUNE_CLASSES_WEAK.length),   '常緑樹': nulls(PRUNE_CLASSES_WEAK.length) },
+    },
+    fell: { '人力': nulls(FELL_CLASSES.length), 'チェーンソー': nulls(FELL_CLASSES.length) },
+    mow: Object.fromEntries(MOW_METHODS.map(m => [m, null])),
+  };
+}
+
+// 幹周cから区分を探して単価を返す（該当なし・未設定はnull）
+function classPrice(classes, prices, c) {
+  if (c == null || c === '' || !Array.isArray(prices)) return null;
+  const n = Number(c);
+  if (!isFinite(n)) return null;
+  for (let i = 0; i < classes.length; i++) {
+    if (n < classes[i]) return prices[i] != null ? prices[i] : null;
+  }
+  return null; // 区分の上限を超える場合は手入力
+}
+
+// 木の作業1件の契約単価（1本あたり・円）。求められない場合はnull
+function unitPriceForWork(gs, tree, w) {
+  const tbl = unitPrices[String(gs.selectedYear)];
+  if (!tbl) return null;
+  if (w.type === '剪定') {
+    const grp = (w.subType === '弱剪定') ? tbl.prune.weak : tbl.prune.strong;
+    const classes = (w.subType === '弱剪定') ? PRUNE_CLASSES_WEAK : PRUNE_CLASSES_STRONG;
+    return classPrice(classes, grp && grp[w.foliage || '落葉樹'], tree.diameter);
+  }
+  if (w.type === '伐採') {
+    return classPrice(FELL_CLASSES, tbl.fell && tbl.fell[w.method || '人力'], tree.diameter);
+  }
+  return null;
+}
+
+// 単価から作業の見積額を自動セット（設定できたらtrue）
+function autoCalcWorkAmount(gs, tree, w) {
+  const p = unitPriceForWork(gs, tree, w);
+  if (p == null) return false;
+  w.amount = Math.round(p);
+  return true;
+}
+
+// 草刈りエリアの見積額を自動セット（面積×工法単価）
+function autoCalcMowAmount(gs, a) {
+  const tbl = unitPrices[String(gs.selectedYear)];
+  const p = tbl && tbl.mow ? tbl.mow[a.mowMethod || DEFAULT_MOW_METHOD] : null;
+  if (p == null || a.sqm == null || a.sqm === '') return false;
+  a.amount = Math.round(p * Number(a.sqm));
+  return true;
+}
 
 let addMode = false;            // create new green space via map click
 let repositionTargetId = null;  // move existing green space's map pin
@@ -1384,7 +1506,7 @@ function saveSettings() {
       await fb.setDoc(fb.doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]), {
         types, statuses, budgetCategories,
         people: peopleList, contractors: contractorList, envTaxBudgets,
-        categoryBudgets,
+        categoryBudgets, unitPrices,
       });
       syncErrored = false;
     } catch {
@@ -1429,6 +1551,7 @@ async function loadAllFromCloud() {
     contractorList = Array.isArray(c.contractors) ? c.contractors : [];
     envTaxBudgets = c.envTaxBudgets || {};
     categoryBudgets = c.categoryBudgets || {};
+    unitPrices = c.unitPrices || {};
   }
   // 旧仕様（緑地ごとの予算額）からの引き継ぎ:
   // 全体予算が未設定の年度・予算種別だけ、各緑地に設定されていた額を取り込む
@@ -1504,7 +1627,7 @@ async function migrateLocalIfAny() {
 // ---- データのバックアップ（書き出し・復元） ----
 // クラウド保存が主になったが、誤操作からの復旧・年度末の控えとしてファイル保存も残す。
 // ファイル形式は旧版と互換（localStorageキー名で格納）。
-const BACKUP_KEYS = [STORAGE_KEY, TYPES_KEY, STATUS_KEY, BUDCAT_KEY, PEOPLE_KEY, CONTRACTORS_KEY, ENVTAX_BUDGET_KEY];
+const BACKUP_KEYS = [STORAGE_KEY, TYPES_KEY, STATUS_KEY, BUDCAT_KEY, PEOPLE_KEY, CONTRACTORS_KEY, ENVTAX_BUDGET_KEY, UNITPRICE_KEY];
 
 function updateStorageMeter() {
   const el = document.getElementById('storageMeter');
@@ -1527,6 +1650,7 @@ async function buildBackupPayload() {
   payload.stores[PEOPLE_KEY] = JSON.stringify(peopleList);
   payload.stores[CONTRACTORS_KEY] = JSON.stringify(contractorList);
   payload.stores[ENVTAX_BUDGET_KEY] = JSON.stringify(envTaxBudgets);
+  payload.stores[UNITPRICE_KEY] = JSON.stringify(unitPrices);
   return payload;
 }
 
@@ -1649,6 +1773,7 @@ document.getElementById('backupImportInput').addEventListener('change', (e) => {
       peopleList = parse(PEOPLE_KEY, []);
       contractorList = parse(CONTRACTORS_KEY, []);
       envTaxBudgets = parse(ENVTAX_BUDGET_KEY, {});
+      unitPrices = parse(UNITPRICE_KEY, {});
       for (const gs of data) {
         gs.__photosLoaded = true; // バックアップは写真込み
         gs.pdfPhotoId = null;     // 写真ドキュメントは作り直す
@@ -1883,7 +2008,7 @@ function renderTreeMarkerList(gs) {
         </span>
       </div>
       <div class="row2">
-        <div class="field"><label>樹径（cm）</label><input type="number" data-diameter="${t.id}" value="${t.diameter != null ? t.diameter : ''}" placeholder="例: 30"></div>
+        <div class="field"><label>幹周 c（cm）※単価計算に使用</label><input type="number" data-diameter="${t.id}" value="${t.diameter != null ? t.diameter : ''}" placeholder="例: 45"></div>
         <div class="field"><label>状況写真</label><input type="file" accept="image/*" data-tree-photo="${t.id}"></div>
       </div>
       ${t.photo ? `<img class="photo-thumb" src="${t.photo}" data-tree-photo-view="${t.id}">` : ''}
@@ -1896,6 +2021,12 @@ function renderTreeMarkerList(gs) {
             ${w.type === '剪定' ? `<select data-work-subtype="${t.id}|${w.id}" title="剪定の内容">
               <option value="強剪定" ${(w.subType || '強剪定') === '強剪定' ? 'selected' : ''}>強剪定</option>
               <option value="弱剪定" ${w.subType === '弱剪定' ? 'selected' : ''}>弱剪定</option>
+            </select>
+            <select data-work-foliage="${t.id}|${w.id}" title="落葉樹か常緑樹か（単価が異なります）">
+              ${FOLIAGE_KINDS.map(k => `<option value="${k}" ${(w.foliage || '落葉樹') === k ? 'selected' : ''}>${k}</option>`).join('')}
+            </select>` : ''}
+            ${w.type === '伐採' ? `<select data-work-method="${t.id}|${w.id}" title="伐採の方法（単価が異なります）">
+              ${FELL_METHODS.map(k => `<option value="${k}" ${(w.method || '人力') === k ? 'selected' : ''}>${k}</option>`).join('')}
             </select>` : ''}
             <input type="date" data-work-date="${t.id}|${w.id}" value="${w.date || ''}">
             <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="見積額（円）" style="width:110px;">
@@ -1915,7 +2046,13 @@ function renderTreeMarkerList(gs) {
   wrap.querySelectorAll('input[data-diameter]').forEach(inp => {
     inp.addEventListener('change', () => {
       const t = gs.treeMarkers.find(x => x.id === inp.dataset.diameter);
-      if (t) { t.diameter = inp.value === '' ? null : Number(inp.value); save(); }
+      if (!t) return;
+      t.diameter = inp.value === '' ? null : Number(inp.value);
+      // 幹周が決まれば、未発注の作業の見積額を単価表から自動計算
+      let changed = false;
+      (t.works || []).forEach(w => { if (!w.consumedBy && autoCalcWorkAmount(gs, t, w)) changed = true; });
+      save();
+      if (changed) { renderTreeMarkerList(gs); renderPdfPins(gs); renderBudgetCard(gs); }
     });
   });
   wrap.querySelectorAll('input[data-tree-photo]').forEach(inp => {
@@ -1966,7 +2103,40 @@ function renderTreeMarkerList(gs) {
       const [treeId, workId] = sel.dataset.workSubtype.split('|');
       const t = gs.treeMarkers.find(x => x.id === treeId);
       const w = t && t.works.find(x => x.id === workId);
-      if (w) { w.subType = sel.value; save(); renderBudgetCard(gs); }
+      if (!w) return;
+      w.subType = sel.value;
+      const changed = !w.consumedBy && autoCalcWorkAmount(gs, t, w);
+      save();
+      renderBudgetCard(gs);
+      if (changed) { renderTreeMarkerList(gs); renderPdfPins(gs); }
+    });
+  });
+  // 剪定の落葉樹/常緑樹（単価が異なる）
+  wrap.querySelectorAll('select[data-work-foliage]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const [treeId, workId] = sel.dataset.workFoliage.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (!w) return;
+      w.foliage = sel.value;
+      const changed = !w.consumedBy && autoCalcWorkAmount(gs, t, w);
+      save();
+      renderBudgetCard(gs);
+      if (changed) { renderTreeMarkerList(gs); renderPdfPins(gs); }
+    });
+  });
+  // 伐採の人力/チェーンソー（単価が異なる）
+  wrap.querySelectorAll('select[data-work-method]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const [treeId, workId] = sel.dataset.workMethod.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (!w) return;
+      w.method = sel.value;
+      const changed = !w.consumedBy && autoCalcWorkAmount(gs, t, w);
+      save();
+      renderBudgetCard(gs);
+      if (changed) { renderTreeMarkerList(gs); renderPdfPins(gs); }
     });
   });
   wrap.querySelectorAll('input[data-work-note]').forEach(inp => {
@@ -4013,10 +4183,13 @@ function renderMowAreaList(gs) {
     wrap.innerHTML = '';
     return;
   }
-  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🌿 草刈りエリア</label>' + gs.mowAreas.map(a => `
+  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🌿 草刈りエリア（面積を入れると工法の単価で見積額を自動計算）</label>' + gs.mowAreas.map(a => `
     <div class="pin-item">
       <span>🌿 ${escapeHtml(a.label)}</span>
       <input type="number" data-mow-sqm="${a.id}" value="${a.sqm != null ? a.sqm : ''}" placeholder="㎡" style="width:70px; font-size:12px; padding:2px 4px;">
+      <select data-mow-method="${a.id}" title="草刈りの工法（単価が異なります）" style="font-size:12px; padding:2px; max-width:150px;">
+        ${MOW_METHODS.map(m => `<option value="${escapeHtml(m)}" ${(a.mowMethod || DEFAULT_MOW_METHOD) === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
       <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="見積額" style="width:90px; font-size:12px; padding:2px 4px;">
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
@@ -4028,7 +4201,22 @@ function renderMowAreaList(gs) {
   wrap.querySelectorAll('input[data-mow-sqm]').forEach(inp => {
     inp.addEventListener('change', () => {
       const a = gs.mowAreas.find(x => x.id === inp.dataset.mowSqm);
-      if (a) { a.sqm = inp.value === '' ? null : Number(inp.value); save(); renderPdfPins(gs); }
+      if (!a) return;
+      a.sqm = inp.value === '' ? null : Number(inp.value);
+      const changed = !a.consumedBy && autoCalcMowAmount(gs, a);
+      save();
+      renderPdfPins(gs);
+      if (changed) { renderMowAreaList(gs); renderBudgetCard(gs); }
+    });
+  });
+  wrap.querySelectorAll('select[data-mow-method]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === sel.dataset.mowMethod);
+      if (!a) return;
+      a.mowMethod = sel.value;
+      const changed = !a.consumedBy && autoCalcMowAmount(gs, a);
+      save();
+      if (changed) { renderMowAreaList(gs); renderPdfPins(gs); renderBudgetCard(gs); }
     });
   });
   wrap.querySelectorAll('input[data-mow-amount]').forEach(inp => {
@@ -4123,13 +4311,18 @@ document.getElementById('btnMowConfirm').addEventListener('click', () => {
   if (label == null || label === '') { return; }
   const sqmStr = prompt('面積（㎡・わかればで結構です。空欄可）', '');
   const sqm = (sqmStr && sqmStr.trim() !== '' && !isNaN(Number(sqmStr))) ? Number(sqmStr) : null;
-  const amountStr = prompt('見積額（円・わかればで結構です。空欄可）', '');
-  const amount = (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null;
   ensureMowShape(gs);
-  gs.mowAreas.push({
-    id: uid(), label, points: mowDraftPoints.slice(), sqm, amount,
+  const newArea = {
+    id: uid(), label, points: mowDraftPoints.slice(), sqm, amount: null,
+    mowMethod: DEFAULT_MOW_METHOD,
     budgetCategory: budgetCategories[0] || null, consumedBy: null
-  });
+  };
+  // 単価表があれば面積から自動計算。無ければ従来通り手入力を促す
+  if (!autoCalcMowAmount(gs, newArea)) {
+    const amountStr = prompt('見積額（円・わかればで結構です。空欄可）\n※単価表を登録すると面積から自動計算されます', '');
+    newArea.amount = (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null;
+  }
+  gs.mowAreas.push(newArea);
   mowDrawMode = false; mowDraftPoints = [];
   save();
   resetPdfModeButtons();
@@ -4169,13 +4362,19 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
     const type = pdfTreeAddMode;
     const label = prompt('木の名称・説明を入力してください', type === '剪定' ? '剪定予定の木' : '伐採予定の木');
     if (label) {
-      const amountStr = prompt('見積額（円・わかればで結構です。空欄可）', '');
-      const amount = (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null;
+      // 幹周を先に聞き、単価表があれば見積額はその場で自動計算する
+      const cStr = prompt('幹周 c（cm）（わかればで結構です。空欄可）\n※単価表があれば見積額を自動計算します', '');
+      const diameter = (cStr && cStr.trim() !== '' && !isNaN(Number(cStr))) ? Number(cStr) : null;
       if (!gs.treeMarkers) gs.treeMarkers = [];
+      const newWork = { id: uid(), type, subType: type === '剪定' ? '強剪定' : '', method: type === '伐採' ? '人力' : undefined, foliage: type === '剪定' ? '落葉樹' : undefined, date: null, note: '', amount: null, budgetCategory: budgetCategories[0] || null, done: false, consumedBy: null };
       const newTree = {
-        id: uid(), x, y, label, diameter: null, photo: null,
-        works: [{ id: uid(), type, subType: type === '剪定' ? '強剪定' : '', date: null, note: '', amount, budgetCategory: budgetCategories[0] || null, done: false, consumedBy: null }]
+        id: uid(), x, y, label, diameter, photo: null,
+        works: [newWork]
       };
+      if (!autoCalcWorkAmount(gs, newTree, newWork)) {
+        const amountStr = prompt('見積額（円・わかればで結構です。空欄可）', '');
+        newWork.amount = (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null;
+      }
       gs.treeMarkers.push(newTree);
       save();
       renderPdfPins(gs);
@@ -4225,6 +4424,142 @@ function openSummary() {
 document.getElementById('btnOpenSummary').addEventListener('click', openSummary);
 document.getElementById('btnCloseSummary').addEventListener('click', () => {
   document.getElementById('summaryOverlay').style.display = 'none';
+});
+
+// ============================================================
+// 単価表オーバーレイ
+// ============================================================
+let unitPriceYear = String(new Date().getMonth() + 1 >= 4 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+
+function updateUnitPriceStatus() {
+  const el = document.getElementById('unitPriceStatus');
+  if (!el) return;
+  const years = Object.keys(unitPrices).sort();
+  el.textContent = years.length ? `登録済みの年度: ${years.map(y => y + '年度').join('・')}` : 'まだ単価が登録されていません';
+}
+
+function classLabel(classes, i) {
+  const lo = i === 0 ? 0 : classes[i - 1];
+  return i === 0 ? `c ${classes[0]}㎝未満` : `c ${lo}～${classes[i]}㎝未満`;
+}
+
+// 単価入力表を1ブロック描画（列=区分、行=幹周クラス）
+function priceBlockHtml(title, classes, groups, pathPrefix) {
+  const cols = Object.keys(groups);
+  let html = `<h3 style="margin:14px 0 4px; color:var(--green-dark); font-size:0.95rem;">${escapeHtml(title)}</h3>`;
+  html += `<div style="overflow-x:auto;"><table style="border-collapse:collapse; font-size:0.82rem;"><tr><th style="border:1px solid #ccc; padding:3px 8px; background:#e8f5e9;">幹周 c（cm）</th>`;
+  cols.forEach(col => { html += `<th style="border:1px solid #ccc; padding:3px 8px; background:#e8f5e9;">${escapeHtml(col)}（円/本）</th>`; });
+  html += `</tr>`;
+  classes.forEach((upper, i) => {
+    html += `<tr><td style="border:1px solid #ccc; padding:3px 8px; white-space:nowrap;">${classLabel(classes, i)}</td>`;
+    cols.forEach(col => {
+      const v = groups[col][i];
+      html += `<td style="border:1px solid #ccc; padding:2px;"><input type="number" step="0.1" data-up-path="${pathPrefix}|${escapeHtml(col)}|${i}" value="${v != null ? v : ''}" style="width:110px; padding:4px 6px; text-align:right; border:none; font-size:0.82rem;"></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</table></div>`;
+  return html;
+}
+
+function renderUnitPriceOverlay() {
+  const sel = document.getElementById('unitPriceYearSelect');
+  // 年度候補: 登録済み年度 + 今年度前後
+  const fy = new Date().getMonth() + 1 >= 4 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const years = new Set([...Object.keys(unitPrices), String(fy - 1), String(fy), String(fy + 1)]);
+  sel.innerHTML = [...years].sort().map(y => `<option value="${y}" ${y === unitPriceYear ? 'selected' : ''}>${y}年度（令和${y - 2018}年度）</option>`).join('');
+
+  const tbl = unitPrices[unitPriceYear];
+  const wrap = document.getElementById('unitPriceTables');
+  if (!tbl) {
+    wrap.innerHTML = `<div class="empty-msg" style="margin-top:12px;">${unitPriceYear}年度の単価はまだ登録されていません。「📄 令和8年度の契約単価を読み込む」または「前年度からコピー」で始めるか、下の表に直接入力してください。</div>`
+      + `<button class="outline" id="btnInitUnitTable" style="margin-top:8px;">空の表を作って手入力する</button>`;
+    document.getElementById('btnInitUnitTable').addEventListener('click', () => {
+      unitPrices[unitPriceYear] = emptyUnitPriceTable();
+      saveSettings(); renderUnitPriceOverlay(); updateUnitPriceStatus();
+    });
+    return;
+  }
+
+  let html = '';
+  html += priceBlockHtml('✂️ 強剪定（高木基本剪定）', PRUNE_CLASSES_STRONG, tbl.prune.strong, 'prune|strong');
+  html += priceBlockHtml('✂️ 弱剪定（高木軽剪定）', PRUNE_CLASSES_WEAK, tbl.prune.weak, 'prune|weak');
+  html += priceBlockHtml('🪓 伐採（樹木伐採）', FELL_CLASSES, tbl.fell, 'fell');
+  // 草刈り（工法別 円/㎡）
+  html += `<h3 style="margin:14px 0 4px; color:var(--green-dark); font-size:0.95rem;">🌿 草刈り・除草（円/㎡）</h3>`;
+  html += `<table style="border-collapse:collapse; font-size:0.82rem;">`;
+  MOW_METHODS.forEach(m => {
+    const v = tbl.mow[m];
+    html += `<tr><td style="border:1px solid #ccc; padding:3px 8px;">${escapeHtml(m)}</td>`
+      + `<td style="border:1px solid #ccc; padding:2px;"><input type="number" step="0.1" data-up-mow="${escapeHtml(m)}" value="${v != null ? v : ''}" style="width:110px; padding:4px 6px; text-align:right; border:none; font-size:0.82rem;"></td></tr>`;
+  });
+  html += `</table>`;
+  html += `<small class="help" style="display:block; margin-top:8px;">空欄の区分は自動計算されません（見積額は手入力できます）。金額は円単位（小数=銭も可）。</small>`;
+  wrap.innerHTML = html;
+
+  // 入力の保存
+  wrap.querySelectorAll('input[data-up-path]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const [kind, colOrSub, subOrIdx, maybeIdx] = inp.dataset.upPath.split('|');
+      const val = inp.value === '' ? null : Number(inp.value);
+      const t = unitPrices[unitPriceYear];
+      if (kind === 'prune') t.prune[colOrSub][subOrIdx][Number(maybeIdx)] = val;
+      else if (kind === 'fell') t.fell[colOrSub][Number(subOrIdx)] = val;
+      saveSettings(); updateUnitPriceStatus();
+    });
+  });
+  wrap.querySelectorAll('input[data-up-mow]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      unitPrices[unitPriceYear].mow[inp.dataset.upMow] = inp.value === '' ? null : Number(inp.value);
+      saveSettings(); updateUnitPriceStatus();
+    });
+  });
+}
+
+document.getElementById('btnOpenUnitPrices').addEventListener('click', () => {
+  const gs = getGreen(currentId);
+  if (gs && gs.selectedYear) unitPriceYear = String(gs.selectedYear);
+  renderUnitPriceOverlay();
+  document.getElementById('unitPriceOverlay').style.display = 'flex';
+});
+document.getElementById('btnCloseUnitPrices').addEventListener('click', () => {
+  document.getElementById('unitPriceOverlay').style.display = 'none';
+});
+document.getElementById('unitPriceYearSelect').addEventListener('change', (e) => {
+  unitPriceYear = e.target.value;
+  renderUnitPriceOverlay();
+});
+document.getElementById('btnLoadR8Prices').addEventListener('click', () => {
+  if (unitPrices[unitPriceYear] && !confirm(`${unitPriceYear}年度の単価を、令和8年度の契約単価で上書きします。よろしいですか？`)) return;
+  unitPrices[unitPriceYear] = JSON.parse(JSON.stringify(R8_UNIT_PRICES));
+  saveSettings(); renderUnitPriceOverlay(); updateUnitPriceStatus();
+});
+document.getElementById('btnCopyPrevYearPrices').addEventListener('click', () => {
+  const prev = unitPrices[String(Number(unitPriceYear) - 1)];
+  if (!prev) { alert(`${Number(unitPriceYear) - 1}年度の単価が登録されていません`); return; }
+  if (unitPrices[unitPriceYear] && !confirm(`${unitPriceYear}年度の単価を、前年度の内容で上書きします。よろしいですか？`)) return;
+  unitPrices[unitPriceYear] = JSON.parse(JSON.stringify(prev));
+  saveSettings(); renderUnitPriceOverlay(); updateUnitPriceStatus();
+});
+// この単価で、全緑地の未発注の木・草刈りの見積額を計算し直す
+document.getElementById('btnRecalcAllAmounts').addEventListener('click', () => {
+  if (!unitPrices[unitPriceYear]) { alert('先にこの年度の単価を登録してください'); return; }
+  if (!confirm(`${unitPriceYear}年度を表示中の全緑地について、未発注の木・草刈りエリアの見積額を単価表から計算し直します。\n（手入力した見積額も上書きされます）よろしいですか？`)) return;
+  let nWorks = 0, nAreas = 0;
+  data.forEach(gs => {
+    if (String(gs.selectedYear) !== unitPriceYear) return;
+    (gs.treeMarkers || []).forEach(t => (t.works || []).forEach(w => {
+      if (!w.consumedBy && autoCalcWorkAmount(gs, t, w)) nWorks++;
+    }));
+    (gs.mowAreas || []).forEach(a => {
+      if (!a.consumedBy && autoCalcMowAmount(gs, a)) nAreas++;
+    });
+    save(gs);
+  });
+  alert(`計算しました（木の作業 ${nWorks}件・草刈りエリア ${nAreas}件）`);
+  const gs = getGreen(currentId);
+  if (gs) { renderTreeMarkerList(gs); renderMowAreaList(gs); renderPdfPins(gs); renderBudgetCard(gs); }
+  renderGreenList();
 });
 document.getElementById('summaryYearSelect').addEventListener('change', (e) => {
   summarySelectedYear = Number(e.target.value);
@@ -4398,6 +4733,7 @@ function renderAll() {
   renderMarkers();
   renderTreeMarkers();
   renderGreenList();
+  updateUnitPriceStatus();
   renderTypeTags();
   renderRecTypeSelect();
   renderStatusTags();
