@@ -729,6 +729,15 @@
     white-space: nowrap;
   }
   .unit-price-tag.na { color: #8d6e63; background: #fff8e1; border-color: #ffe082; }
+  /* 草刈りエリア・メモピンに貼った写真の小さいサムネイル（タップで拡大） */
+  .spot-photo-thumb {
+    width: 34px; height: 34px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    vertical-align: middle;
+  }
 
   .work-pick-list {
     max-height: 160px;
@@ -894,7 +903,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16b</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16c</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -914,7 +923,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-16b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-18a</p>
   </div>
 </div>
 
@@ -1017,7 +1026,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16b</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16c</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1472,6 +1481,8 @@ function serializeGreen(gs) {
     if (gs.pdf.length <= MAX_PHOTO_CHARS) gs.pdfPhotoId = registerPhoto(gs, gs.pdf);
   }
   (gs.treeMarkers || []).forEach(t => { if (t.photo && !t.photoId) t.photoId = registerPhoto(gs, t.photo); });
+  (gs.mowAreas || []).forEach(a => { if (a.photo && !a.photoId) a.photoId = registerPhoto(gs, a.photo); });
+  (gs.pdfPins || []).forEach(p => { if (p.photo && !p.photoId) p.photoId = registerPhoto(gs, p.photo); });
   // 発注の写真: photoIdsが無い(バックアップ復元直後など)場合、dataURL配列から登録し直す
   (gs.records || []).forEach(r => {
     if (r.photos && r.photos.length && (!r.photoIds || r.photoIds.length !== r.photos.length)) {
@@ -1483,6 +1494,8 @@ function serializeGreen(gs) {
   delete clone.pdf; // 本体ドキュメントには画像を含めない（pdfPhotoId経由で復元）
   (clone.records || []).forEach(r => { delete r.photo; delete r.photos; });
   (clone.treeMarkers || []).forEach(t => { delete t.photo; });
+  (clone.mowAreas || []).forEach(a => { delete a.photo; });
+  (clone.pdfPins || []).forEach(p => { delete p.photo; });
   return clone;
 }
 
@@ -1571,6 +1584,8 @@ async function loadPhotosForGreen(gs) {
       r.photos = (r.photoIds || []).map(id => map[id]).filter(Boolean);
     });
     (gs.treeMarkers || []).forEach(t => { if (t.photoId && map[t.photoId]) t.photo = map[t.photoId]; });
+    (gs.mowAreas || []).forEach(a => { if (a.photoId && map[a.photoId]) a.photo = map[a.photoId]; });
+    (gs.pdfPins || []).forEach(p => { if (p.photoId && map[p.photoId]) p.photo = map[p.photoId]; });
   } catch {
     gs.__photosLoaded = false; // 次回開いたとき再試行
   }
@@ -1672,7 +1687,9 @@ function updateStorageMeter() {
   if (!el) return;
   const photoCount = data.reduce((s, gs) =>
     s + (gs.records || []).reduce((s2, r) => s2 + (r.photoIds ? r.photoIds.length : (r.photoId ? 1 : 0)), 0)
-      + (gs.treeMarkers || []).filter(t => t.photoId || t.photo).length, 0);
+      + (gs.treeMarkers || []).filter(t => t.photoId || t.photo).length
+      + (gs.mowAreas || []).filter(a => a.photoId || a.photo).length
+      + (gs.pdfPins || []).filter(p => p.photoId || p.photo).length, 0);
   el.innerHTML = `<div style="font-size:12px; color:#555;">☁️ データはクラウドに保存され、全職員で共有されます（緑地${data.length}件・写真${photoCount}枚）</div>`;
 }
 
@@ -1817,6 +1834,8 @@ document.getElementById('backupImportInput').addEventListener('change', (e) => {
         gs.pdfPhotoId = null;     // 写真ドキュメントは作り直す
         (gs.records || []).forEach(r => { r.photoId = null; r.photoIds = null; });
         (gs.treeMarkers || []).forEach(t => { t.photoId = null; });
+        (gs.mowAreas || []).forEach(a => { a.photoId = null; });
+        (gs.pdfPins || []).forEach(p => { p.photoId = null; });
         await writeGreen(gs);
       }
       saveSettings();
@@ -4400,9 +4419,38 @@ function renderMowAreaList(gs) {
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
       ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : ''}
+      <button class="outline" data-mow-photo-btn="${a.id}" title="このエリアの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
+      <input type="file" accept="image/*" data-mow-photo="${a.id}" style="display:none;">
+      ${a.photo ? `<img class="spot-photo-thumb" src="${a.photo}" data-mow-photo-view="${a.id}" title="タップで拡大">` : ''}
       <button class="danger" data-mow-del="${a.id}">削除</button>
     </div>
   `).join('');
+  // エリアの状況写真: 📷で選択→縮小して保存。サムネイルのタップで拡大表示
+  wrap.querySelectorAll('button[data-mow-photo-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inp = wrap.querySelector(`input[data-mow-photo="${btn.dataset.mowPhotoBtn}"]`);
+      if (inp) inp.click();
+    });
+  });
+  wrap.querySelectorAll('input[data-mow-photo]').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const a = gs.mowAreas.find(x => x.id === inp.dataset.mowPhoto);
+      if (!file || !a) return;
+      resizePhoto(file, (dataUrl) => {
+        a.photo = dataUrl;
+        a.photoId = registerPhoto(gs, dataUrl);
+        save();
+        renderMowAreaList(gs);
+      });
+    });
+  });
+  wrap.querySelectorAll('img[data-mow-photo-view]').forEach(img => {
+    img.addEventListener('click', () => {
+      document.getElementById('photoModalImg').src = img.src;
+      document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
   wrap.querySelectorAll('input[data-mow-sqm]').forEach(inp => {
     inp.addEventListener('change', () => {
       const a = gs.mowAreas.find(x => x.id === inp.dataset.mowSqm);
@@ -4487,13 +4535,43 @@ function renderPinList(gs) {
     return;
   }
   wrap.innerHTML = gs.pdfPins.map(p =>
-    `<div class="pin-item"><span>📍 ${escapeHtml(p.label)}</span><button class="danger" data-pin="${p.id}">削除</button></div>`
+    `<div class="pin-item"><span>📍 ${escapeHtml(p.label)}</span>
+      <button class="outline" data-pin-photo-btn="${p.id}" title="このスポットの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
+      <input type="file" accept="image/*" data-pin-photo="${p.id}" style="display:none;">
+      ${p.photo ? `<img class="spot-photo-thumb" src="${p.photo}" data-pin-photo-view="${p.id}" title="タップで拡大">` : ''}
+      <button class="danger" data-pin="${p.id}">削除</button></div>`
   ).join('');
   wrap.querySelectorAll('button[data-pin]').forEach(btn => {
     btn.addEventListener('click', () => {
       gs.pdfPins = gs.pdfPins.filter(p => p.id !== btn.dataset.pin);
       save();
       renderPdfPins(gs);
+    });
+  });
+  // メモピンの状況写真: 📷で選択→縮小して保存。サムネイルのタップで拡大表示
+  wrap.querySelectorAll('button[data-pin-photo-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inp = wrap.querySelector(`input[data-pin-photo="${btn.dataset.pinPhotoBtn}"]`);
+      if (inp) inp.click();
+    });
+  });
+  wrap.querySelectorAll('input[data-pin-photo]').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const p = gs.pdfPins.find(x => x.id === inp.dataset.pinPhoto);
+      if (!file || !p) return;
+      resizePhoto(file, (dataUrl) => {
+        p.photo = dataUrl;
+        p.photoId = registerPhoto(gs, dataUrl);
+        save();
+        renderPinList(gs);
+      });
+    });
+  });
+  wrap.querySelectorAll('img[data-pin-photo-view]').forEach(img => {
+    img.addEventListener('click', () => {
+      document.getElementById('photoModalImg').src = img.src;
+      document.getElementById('photoModal').style.display = 'flex';
     });
   });
 }
