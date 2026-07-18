@@ -674,8 +674,8 @@
     margin-bottom: 8px;
     background: #fafafa;
   }
-  /* 図面のアイコンから飛んできた時に、どのカードか一瞬で分かるように光らせる */
-  .tree-card.flash { outline: 3px solid #ffb300; box-shadow: 0 0 10px rgba(255,179,0,0.6); }
+  /* 図面のアイコンから飛んできた時に、どのカード・行か一瞬で分かるように光らせる */
+  .tree-card.flash, .pin-item.flash { outline: 3px solid #ffb300; box-shadow: 0 0 10px rgba(255,179,0,0.6); }
   .tree-card-header {
     display: flex;
     justify-content: space-between;
@@ -889,9 +889,9 @@
     .work-row select { padding: 6px 4px; }
     .work-row button.danger { min-height: 36px; }
     .pin-item input, .pin-item select { font-size: 16px !important; }
-    /* 敷地図上のマーカー: 大きすぎると指で操作しづらいため控えめに */
-    .pdf-tree-icon { font-size: 20px; }
-    .pdf-pin { width: 20px; height: 20px; }
+    /* 敷地図上のマーカー: 大きすぎると指で操作しづらいため控えめに（🔍＋の拡大でさらに相対的に小さくなる） */
+    .pdf-tree-icon { font-size: 18px; }
+    .pdf-pin { width: 18px; height: 18px; }
     .pdf-tree-amount-label { font-size: 10px; padding: 1px 5px; }
     .mow-area-label { font-size: 10px; padding: 1px 6px; }
     .tree-card-header { flex-wrap: wrap; gap: 6px; }
@@ -903,7 +903,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16c</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16d</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -923,7 +923,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-18a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19a</p>
   </div>
 </div>
 
@@ -1026,7 +1026,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16c</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16d</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1049,11 +1049,24 @@
 
   <h3 style="margin-top:14px;">📄 緑地詳細図（敷地図にプロット）</h3>
   <div class="pdf-wrap">
+    <div class="field" style="margin-bottom:8px;">
+      <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
+      <input type="file" id="pdfUpload" accept="application/pdf,image/*">
+      <small class="help" id="pdfFileName"></small>
+    </div>
     <div class="editing-banner" id="roundFilterBanner"></div>
     <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
+    <div id="planZoomBar" style="display:none; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+      <button class="outline" id="btnPlanZoomOut" style="min-height:0; padding:4px 14px;">🔍－</button>
+      <button class="outline" id="btnPlanZoomIn" style="min-height:0; padding:4px 14px;">🔍＋</button>
+      <span id="planZoomLabel" style="font-size:12px; color:#555; font-weight:bold;">×1</span>
+      <small class="help" style="margin:0;">🔍＋で図面を拡大するとアイコンが相対的に小さくなり、細かい場所をタップしやすくなります</small>
+    </div>
     <div id="pdfCanvasHolder" style="display:none;">
-      <canvas id="pdfCanvas"></canvas>
-      <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+      <div id="pdfZoomInner" style="position:relative; display:inline-block;">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="pdfPinLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+      </div>
     </div>
     <div id="pdfControls" style="display:none; margin-top:8px;">
       <div class="row2">
@@ -1065,14 +1078,11 @@
         <button id="btnMowConfirm" style="width:100%;">✅ このエリアで確定</button>
         <button class="secondary" id="btnMowCancel" style="width:100%;">キャンセル</button>
       </div>
+      <button class="outline" id="btnRepairAddMode" style="width:100%; margin-top:8px;">🔧 配置図クリックで修繕箇所を追加</button>
       <button class="outline" id="btnPinAddMode" style="width:100%; margin-top:8px;">📍 クリックで通常のメモピンを追加</button>
       <div id="mowAreaList" style="margin-top:8px;"></div>
+      <div id="repairList" style="margin-top:8px;"></div>
       <div id="pinList" style="margin-top:8px;"></div>
-    </div>
-    <div class="field" style="margin-top:8px;">
-      <label>この緑地の敷地図をアップロード（PDF・写真・画像）</label>
-      <input type="file" id="pdfUpload" accept="application/pdf,image/*">
-      <small class="help" id="pdfFileName"></small>
     </div>
   </div>
 
@@ -1391,6 +1401,7 @@ let repositionTargetId = null;  // move existing green space's map pin
 let currentId = null;
 let editingRecordId = null;
 let pinAddMode = false;
+let repairAddMode = false; // 配置図クリックで修繕箇所を追加するモード
 let hasAutoZoomed = false; // only force a zoom-in the first time any green space is opened
 let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree marker directly on the site-plan canvas
 let selectedRoundId = null; // record id whose site-plan trees are being isolated in the "作業回ごとの管理" table
@@ -1483,6 +1494,7 @@ function serializeGreen(gs) {
   (gs.treeMarkers || []).forEach(t => { if (t.photo && !t.photoId) t.photoId = registerPhoto(gs, t.photo); });
   (gs.mowAreas || []).forEach(a => { if (a.photo && !a.photoId) a.photoId = registerPhoto(gs, a.photo); });
   (gs.pdfPins || []).forEach(p => { if (p.photo && !p.photoId) p.photoId = registerPhoto(gs, p.photo); });
+  (gs.repairSpots || []).forEach(s => { if (s.photo && !s.photoId) s.photoId = registerPhoto(gs, s.photo); });
   // 発注の写真: photoIdsが無い(バックアップ復元直後など)場合、dataURL配列から登録し直す
   (gs.records || []).forEach(r => {
     if (r.photos && r.photos.length && (!r.photoIds || r.photoIds.length !== r.photos.length)) {
@@ -1496,6 +1508,7 @@ function serializeGreen(gs) {
   (clone.treeMarkers || []).forEach(t => { delete t.photo; });
   (clone.mowAreas || []).forEach(a => { delete a.photo; });
   (clone.pdfPins || []).forEach(p => { delete p.photo; });
+  (clone.repairSpots || []).forEach(s => { delete s.photo; });
   return clone;
 }
 
@@ -1586,6 +1599,7 @@ async function loadPhotosForGreen(gs) {
     (gs.treeMarkers || []).forEach(t => { if (t.photoId && map[t.photoId]) t.photo = map[t.photoId]; });
     (gs.mowAreas || []).forEach(a => { if (a.photoId && map[a.photoId]) a.photo = map[a.photoId]; });
     (gs.pdfPins || []).forEach(p => { if (p.photoId && map[p.photoId]) p.photo = map[p.photoId]; });
+    (gs.repairSpots || []).forEach(s => { if (s.photoId && map[s.photoId]) s.photo = map[s.photoId]; });
   } catch {
     gs.__photosLoaded = false; // 次回開いたとき再試行
   }
@@ -1689,7 +1703,8 @@ function updateStorageMeter() {
     s + (gs.records || []).reduce((s2, r) => s2 + (r.photoIds ? r.photoIds.length : (r.photoId ? 1 : 0)), 0)
       + (gs.treeMarkers || []).filter(t => t.photoId || t.photo).length
       + (gs.mowAreas || []).filter(a => a.photoId || a.photo).length
-      + (gs.pdfPins || []).filter(p => p.photoId || p.photo).length, 0);
+      + (gs.pdfPins || []).filter(p => p.photoId || p.photo).length
+      + (gs.repairSpots || []).filter(s => s.photoId || s.photo).length, 0);
   el.innerHTML = `<div style="font-size:12px; color:#555;">☁️ データはクラウドに保存され、全職員で共有されます（緑地${data.length}件・写真${photoCount}枚）</div>`;
 }
 
@@ -1836,6 +1851,7 @@ document.getElementById('backupImportInput').addEventListener('change', (e) => {
         (gs.treeMarkers || []).forEach(t => { t.photoId = null; });
         (gs.mowAreas || []).forEach(a => { a.photoId = null; });
         (gs.pdfPins || []).forEach(p => { p.photoId = null; });
+        (gs.repairSpots || []).forEach(s => { s.photoId = null; });
         await writeGreen(gs);
       }
       saveSettings();
@@ -2091,7 +2107,7 @@ function renderTreeMarkerList(gs) {
               <option value="auto" ${w.priceMode === 'manual' ? '' : 'selected'}>単価契約</option>
               <option value="manual" ${w.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
             </select>
-            <span class="amount-label">見積額</span>
+            <span class="amount-label">見積額（円）</span>
             <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="円" style="width:95px;">
             ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}">${escapeHtml(pl)}</span>`)(workUnitPriceLabel(gs, t, w))}
             <select data-work-budget="${t.id}|${w.id}">
@@ -3088,7 +3104,11 @@ function collectPlannedTreeWorks(gs, cat, year) {
 
 // 草刈りエリア (polygons on the site plan). Same accounting rule as tree works: their 見積額
 // counts as planned budget usage until a 保全作業記録's 草刈り item claims them.
+function ensureRepairShape(gs) {
+  if (!gs.repairSpots) gs.repairSpots = [];
+}
 function ensureMowShape(gs) {
+  ensureRepairShape(gs);
   if (!gs.mowAreas) gs.mowAreas = [];
   if (!gs.mowChecks) gs.mowChecks = {};
 }
@@ -3096,6 +3116,12 @@ function collectPlannedMowAreas(gs, cat) {
   ensureMowShape(gs);
   return gs.mowAreas.filter(a =>
     !a.consumedBy && a.amount != null && (a.budgetCategory || budgetCategories[0]) === cat);
+}
+// 未記録の修繕箇所の見積額も予算の「見込み」に含める
+function collectPlannedRepairSpots(gs, cat) {
+  ensureRepairShape(gs);
+  return gs.repairSpots.filter(s =>
+    !s.consumedBy && s.amount != null && (s.budgetCategory || budgetCategories[0]) === cat);
 }
 function releaseMowAreas(gs, recordId) {
   ensureMowShape(gs);
@@ -3106,6 +3132,17 @@ function claimMowAreas(gs, areaRefs, recordId) {
   (areaRefs || []).forEach(id => {
     const a = gs.mowAreas.find(x => x.id === id);
     if (a) a.consumedBy = recordId;
+  });
+}
+function releaseRepairSpots(gs, recordId) {
+  ensureRepairShape(gs);
+  gs.repairSpots.forEach(s => { if (s.consumedBy === recordId) s.consumedBy = null; });
+}
+function claimRepairSpots(gs, repairRefs, recordId) {
+  ensureRepairShape(gs);
+  (repairRefs || []).forEach(id => {
+    const s = gs.repairSpots.find(x => x.id === id);
+    if (s) s.consumedBy = recordId;
   });
 }
 
@@ -3165,6 +3202,7 @@ function renderBudgetCard(gs) {
     const entries = [];
     const planned = [];
     const plannedMow = [];
+    const plannedRepair = [];
     data.forEach(g => {
       (g.records || []).filter(r => String(r.year) === String(y)).forEach(r => {
         normalizeItemBudgets(r);
@@ -3175,11 +3213,13 @@ function renderBudgetCard(gs) {
       // Site-plan tree works (剪定・伐採) and 草刈りエリア not yet recorded: their 見積額 counts as planned usage.
       collectPlannedTreeWorks(g, cat, y).forEach(p => planned.push({ g, tree: p.tree, work: p.work }));
       collectPlannedMowAreas(g, cat).forEach(a => plannedMow.push({ g, area: a }));
+      collectPlannedRepairSpots(g, cat).forEach(s => plannedRepair.push({ g, spot: s }));
     });
     entries.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || ''));
     const spent = entries.reduce((s, e) => s + Number(e.item.cost || 0), 0);
     const plannedSum = planned.reduce((s, p) => s + Number(p.work.amount || 0), 0)
-      + plannedMow.reduce((s, x) => s + Number(x.area.amount || 0), 0);
+      + plannedMow.reduce((s, x) => s + Number(x.area.amount || 0), 0)
+      + plannedRepair.reduce((s, x) => s + Number(x.spot.amount || 0), 0);
     const combined = spent + plannedSum;
     const breakdownHtml = plannedSum > 0
       ? `<div class="budget-remain">内訳: 記録済み ¥${spent.toLocaleString()} ＋ 見積（未記録） ¥${plannedSum.toLocaleString()}</div>`
@@ -3218,6 +3258,13 @@ function renderBudgetCard(gs) {
         <span>${greenPrefix(x.g)}🌿 草刈り [${escapeHtml(x.area.label)}]${x.area.sqm != null ? ` ${x.area.sqm}㎡` : ''}</span>
         <span class="status-badge">見積（未記録）</span>
         <span class="brow-cost">¥${Number(x.area.amount).toLocaleString()}</span>
+      </div>`).join('')
+      + plannedRepair.map(x => `
+      <div class="budget-cat-record-row">
+        <span>未定</span>
+        <span>${greenPrefix(x.g)}🔧 修繕 [${escapeHtml(x.spot.label)}]</span>
+        <span class="status-badge">見積（未記録）</span>
+        <span class="brow-cost">¥${Number(x.spot.amount).toLocaleString()}</span>
       </div>`).join('');
     const foreignRowHtml = (e) => `<div class="budget-cat-record-row">
       <span>${escapeHtml(e.r.date || '-')}</span>
@@ -3226,7 +3273,7 @@ function renderBudgetCard(gs) {
       <span class="brow-cost">¥${Number(e.item.cost || 0).toLocaleString()}</span>
       <button class="outline" data-open-green="${e.g.id}">開く</button>
     </div>`;
-    const recordRowsHtml = (entries.length || planned.length || plannedMow.length)
+    const recordRowsHtml = (entries.length || planned.length || plannedMow.length || plannedRepair.length)
       ? plannedRowsHtml + entries.map(e => e.g.id === gs.id ? budgetCatItemRowHtml(gs, e.r, e.item) : foreignRowHtml(e)).join('')
       : '<div class="empty-msg">この予算の作業項目はまだありません</div>';
 
@@ -3364,6 +3411,7 @@ function renderItemListWrap() {
         if (w) w.consumedBy = newId;
       });
       if (item.areaRefs && item.areaRefs.length) claimMowAreas(gs, item.areaRefs, newId);
+      if (item.repairRefs && item.repairRefs.length) claimRepairSpots(gs, item.repairRefs, newId);
       currentItems.splice(idx, 1);
       save();
       renderItemListWrap();
@@ -3468,6 +3516,9 @@ document.getElementById('btnCancelEdit').addEventListener('click', () => {
         if (item.areaRefs && item.areaRefs.length) {
           claimMowAreas(gs, item.areaRefs, r.id);
         }
+        if (item.repairRefs && item.repairRefs.length) {
+          claimRepairSpots(gs, item.repairRefs, r.id);
+        }
       });
       save();
       renderTreeMarkerList(gs);
@@ -3537,6 +3588,9 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
       if (item.areaRefs && item.areaRefs.length) {
         claimMowAreas(gs, item.areaRefs, recordId);
       }
+      if (item.repairRefs && item.repairRefs.length) {
+        claimRepairSpots(gs, item.repairRefs, recordId);
+      }
     });
   }
   save();
@@ -3557,6 +3611,7 @@ function editRecord(gs, recId) {
   // Temporarily free this record's tree-marker / mow-area claims while editing (cancel restores them; save re-claims).
   releaseTreeMarkers(gs, recId);
   releaseMowAreas(gs, recId);
+  releaseRepairSpots(gs, recId);
   editingRecordId = recId;
   if (!gs.years.includes(r.year)) { gs.years.push(r.year); }
   gs.selectedYear = r.year;
@@ -3613,6 +3668,13 @@ function roundItemsSummary(gs, r) {
       }).filter(Boolean);
       if (names.length) targetNames += `[${names.join('・')}]`;
     }
+    if (it.repairRefs && it.repairRefs.length) {
+      const names = it.repairRefs.map(id => {
+        const s = (gs.repairSpots || []).find(x => x.id === id);
+        return s ? s.label : null;
+      }).filter(Boolean);
+      if (names.length) targetNames += `[${names.join('・')}]`;
+    }
     return escapeHtml(t + (q ? ' ' + q : '') + (targetNames ? ' ' + targetNames : ''));
   }).join('、');
 }
@@ -3660,9 +3722,10 @@ function mergeRounds(gs, ids) {
     base.items = (base.items || []).concat(r.items || []);
     base.photos = ((base.photos || []).concat(r.photos || [])).slice(0, 3);
     base.photoIds = ((base.photoIds || []).concat(r.photoIds || [])).slice(0, 3);
-    // この発注に消し込まれていた木・草刈りエリアを統合先へ付け替える
+    // この発注に消し込まれていた木・草刈りエリア・修繕箇所を統合先へ付け替える
     allWorks(gs).forEach(w => { if (w.consumedBy === r.id) w.consumedBy = base.id; });
     (gs.mowAreas || []).forEach(a => { if (a.consumedBy === r.id) a.consumedBy = base.id; });
+    (gs.repairSpots || []).forEach(s => { if (s.consumedBy === r.id) s.consumedBy = base.id; });
   });
   base.cost = (base.items || []).reduce((s, i) => s + Number(i.cost || 0), 0);
   base.envTax = (base.items || []).some(it => it.envTax);
@@ -3788,6 +3851,26 @@ function collectMapItems(gs) {
         budgetCategory: cat, envTax: false,
         workRefs: null,
         areaRefs: list.map(a => a.id),
+      });
+    });
+  }
+  // 図面に置いた未対応の修繕箇所も発注項目にする（予算ごとにまとめる）
+  ensureRepairShape(gs);
+  const repairs = gs.repairSpots.filter(s => !s.consumedBy);
+  if (repairs.length) {
+    const byCat = {};
+    repairs.forEach(s => {
+      const cat = s.budgetCategory || budgetCategories[0] || '通常予算';
+      (byCat[cat] = byCat[cat] || []).push(s);
+    });
+    Object.entries(byCat).forEach(([cat, list]) => {
+      items.push({
+        id: uid(), type: '修繕', subType: '',
+        qty: list.length, unit: '箇所',
+        cost: list.reduce((s2, x) => s2 + Number(x.amount || 0), 0),
+        budgetCategory: cat, envTax: false,
+        workRefs: null, areaRefs: null,
+        repairRefs: list.map(x => x.id),
       });
     });
   }
@@ -4193,26 +4276,58 @@ document.getElementById('pdfUpload').addEventListener('change', async (e) => {
   renderGreenList();
 });
 
+// 図面のズーム: 図面だけをピクセル幅で拡大し、アイコンは同じ大きさのまま
+// →拡大するほどアイコンが相対的に小さくなり、細かい場所をタップしやすくなる
+let planZoom = 1;
+function applyPlanZoom() {
+  const canvas = document.getElementById('pdfCanvas');
+  const holder = document.getElementById('pdfCanvasHolder');
+  const label = document.getElementById('planZoomLabel');
+  if (label) label.textContent = '×' + planZoom;
+  if (planZoom <= 1) {
+    canvas.style.maxWidth = '100%';
+    canvas.style.width = '';
+  } else {
+    const base = holder.parentElement.clientWidth - 18; // pdf-wrapの内側幅
+    canvas.style.maxWidth = 'none';
+    canvas.style.width = Math.round(base * planZoom) + 'px';
+  }
+}
+document.getElementById('btnPlanZoomIn').addEventListener('click', () => {
+  planZoom = Math.min(4, planZoom + 1);
+  applyPlanZoom();
+});
+document.getElementById('btnPlanZoomOut').addEventListener('click', () => {
+  planZoom = Math.max(1, planZoom - 1);
+  applyPlanZoom();
+});
+
 function renderPdfSection(gs) {
   const fileNameEl = document.getElementById('pdfFileName');
   const holder = document.getElementById('pdfCanvasHolder');
   const controls = document.getElementById('pdfControls');
+  const zoomBar = document.getElementById('planZoomBar');
   pinAddMode = false;
   pdfTreeAddMode = null;
+  repairAddMode = false;
   mowDrawMode = false; mowDraftPoints = [];
   treeMoveTargetId = null;
   renderTreeMoveBanner(gs);
   resetPdfModeButtons();
+  planZoom = 1;
+  applyPlanZoom();
 
   if (!gs.pdf) {
     fileNameEl.textContent = '';
     holder.style.display = 'none';
     controls.style.display = 'none';
+    zoomBar.style.display = 'none';
     return;
   }
   fileNameEl.textContent = '読み込み中... (' + (gs.pdfName || 'ファイル') + ')';
   holder.style.display = 'inline-block';
   controls.style.display = 'block';
+  zoomBar.style.display = 'flex';
 
   const isImage = (gs.pdfMime && gs.pdfMime.startsWith('image/')) || !gs.pdf.startsWith('data:application/pdf');
 
@@ -4293,16 +4408,19 @@ function renderPdfPins(gs) {
   // mow areas on the site plan by hiding everything else. Memo pins aren't round-specific.
   let allowedTreeIds = null;
   let allowedAreaIds = null;
+  let allowedRepairIds = null;
   const round = selectedRoundId ? gs.records.find(r => r.id === selectedRoundId) : null;
   if (round) {
     allowedTreeIds = new Set();
     allowedAreaIds = new Set();
+    allowedRepairIds = new Set();
     (round.items || []).forEach(it => {
       (it.workRefs || []).forEach(ref => allowedTreeIds.add(ref.treeId));
       (it.areaRefs || []).forEach(id => allowedAreaIds.add(id));
+      (it.repairRefs || []).forEach(id => allowedRepairIds.add(id));
     });
     banner.style.display = 'block';
-    banner.innerHTML = `🗂️ 「${escapeHtml(round.date || '-')}」の回だけ表示中（対象の木: ${allowedTreeIds.size}件 / 草刈りエリア: ${allowedAreaIds.size}件）　`
+    banner.innerHTML = `🗂️ 「${escapeHtml(round.date || '-')}」の回だけ表示中（対象の木: ${allowedTreeIds.size}件 / 草刈りエリア: ${allowedAreaIds.size}件 / 修繕: ${allowedRepairIds.size}件）　`
       + `<button class="secondary" id="btnClearRoundFilter">すべて表示に戻す</button>`;
     document.getElementById('btnClearRoundFilter').addEventListener('click', () => {
       selectedRoundId = null;
@@ -4373,7 +4491,7 @@ function renderPdfPins(gs) {
       icon.title = `${t.label}（${treeWorksSummary(t)}）クリックで下の詳細へ`;
       icon.addEventListener('click', (e) => {
         // 配置・描画モード中は図面クリックの邪魔をしない
-        if (pdfTreeAddMode || mowDrawMode || pinAddMode || treeMoveTargetId) return;
+        if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
         e.stopPropagation();
         jumpToTreeCard(t.id);
       });
@@ -4389,8 +4507,29 @@ function renderPdfPins(gs) {
         layer.appendChild(amtLabel);
       }
     });
+  // 修繕箇所（🔧）: タップで下の修繕リストの該当行へ
+  (gs.repairSpots || []).filter(s => !allowedRepairIds || allowedRepairIds.has(s.id)).forEach(s => {
+    const icon = document.createElement('div');
+    icon.className = 'pdf-tree-icon';
+    icon.style.left = s.x + '%';
+    icon.style.top = s.y + '%';
+    icon.textContent = '🔧';
+    icon.title = `${s.label}${s.amount != null ? `（¥${Number(s.amount).toLocaleString()}）` : ''}${s.consumedBy ? '（記録済）' : ''}クリックで下の詳細へ`;
+    icon.addEventListener('click', (e) => {
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      e.stopPropagation();
+      const row = document.querySelector(`[data-repair-row="${s.id}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('flash');
+        setTimeout(() => row.classList.remove('flash'), 2000);
+      }
+    });
+    layer.appendChild(icon);
+  });
   renderPinList(gs);
   renderMowAreaList(gs);
+  renderRepairList(gs);
 }
 
 function renderMowAreaList(gs) {
@@ -4412,7 +4551,7 @@ function renderMowAreaList(gs) {
         <option value="auto" ${a.priceMode === 'manual' ? '' : 'selected'}>単価契約</option>
         <option value="manual" ${a.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
       </select>
-      <span class="amount-label">見積額</span>
+      <span class="amount-label">見積額（円）</span>
       <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="円" style="width:90px; font-size:12px; padding:2px 4px;">
       ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}">${escapeHtml(pl)}</span>`)(mowUnitPriceLabel(gs, a))}
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
@@ -4528,6 +4667,94 @@ function renderMowAreaList(gs) {
   });
 }
 
+// 修繕箇所の一覧: 名称✏️・見積額（円・手入力）・予算・📷写真・削除
+function renderRepairList(gs) {
+  const wrap = document.getElementById('repairList');
+  ensureRepairShape(gs);
+  if (gs.repairSpots.length === 0) {
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🔧 修繕箇所（見積額は手入力）</label>' + gs.repairSpots.map(s => `
+    <div class="pin-item" data-repair-row="${s.id}">
+      <span>🔧 ${escapeHtml(s.label)}</span>
+      <button class="outline" data-repair-rename="${s.id}" title="名称を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
+      <span class="amount-label">見積額（円）</span>
+      <input type="number" data-repair-amount="${s.id}" value="${s.amount != null ? s.amount : ''}" placeholder="円" style="width:90px; font-size:12px; padding:2px 4px;">
+      <select data-repair-budget="${s.id}" style="font-size:12px; padding:2px;">
+        ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
+      </select>
+      ${s.consumedBy ? '<span class="env-tax-badge">記録済</span>' : ''}
+      <button class="outline" data-repair-photo-btn="${s.id}" title="この箇所の状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
+      <input type="file" accept="image/*" data-repair-photo="${s.id}" style="display:none;">
+      ${s.photo ? `<img class="spot-photo-thumb" src="${s.photo}" data-repair-photo-view="${s.id}" title="タップで拡大">` : ''}
+      <button class="danger" data-repair-del="${s.id}">削除</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('button[data-repair-rename]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = gs.repairSpots.find(x => x.id === btn.dataset.repairRename);
+      if (!s) return;
+      const name = prompt('この修繕箇所の名称を入力してください', s.label || '');
+      if (name == null || name.trim() === '') return;
+      s.label = name.trim();
+      save();
+      renderPdfPins(gs);
+      renderRoundTable(gs);
+    });
+  });
+  wrap.querySelectorAll('input[data-repair-amount]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const s = gs.repairSpots.find(x => x.id === inp.dataset.repairAmount);
+      if (!s) return;
+      s.amount = inp.value === '' ? null : Number(inp.value);
+      save();
+      renderPdfPins(gs);
+      renderBudgetCard(gs);
+    });
+  });
+  wrap.querySelectorAll('select[data-repair-budget]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const s = gs.repairSpots.find(x => x.id === sel.dataset.repairBudget);
+      if (s) { s.budgetCategory = sel.value; save(); renderBudgetCard(gs); }
+    });
+  });
+  wrap.querySelectorAll('button[data-repair-photo-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inp = wrap.querySelector(`input[data-repair-photo="${btn.dataset.repairPhotoBtn}"]`);
+      if (inp) inp.click();
+    });
+  });
+  wrap.querySelectorAll('input[data-repair-photo]').forEach(inp => {
+    inp.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const s = gs.repairSpots.find(x => x.id === inp.dataset.repairPhoto);
+      if (!file || !s) return;
+      resizePhoto(file, (dataUrl) => {
+        s.photo = dataUrl;
+        s.photoId = registerPhoto(gs, dataUrl);
+        save();
+        renderRepairList(gs);
+      });
+    });
+  });
+  wrap.querySelectorAll('img[data-repair-photo-view]').forEach(img => {
+    img.addEventListener('click', () => {
+      document.getElementById('photoModalImg').src = img.src;
+      document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
+  wrap.querySelectorAll('button[data-repair-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この修繕箇所を削除しますか？')) return;
+      gs.repairSpots = gs.repairSpots.filter(s => s.id !== btn.dataset.repairDel);
+      save();
+      renderPdfPins(gs);
+      renderBudgetCard(gs);
+    });
+  });
+}
+
 function renderPinList(gs) {
   const wrap = document.getElementById('pinList');
   if (!gs.pdfPins || gs.pdfPins.length === 0) {
@@ -4581,6 +4808,7 @@ function resetPdfModeButtons() {
   document.getElementById('btnPdfTreeFell').textContent = '🪓 配置図クリックで伐採予定の木を追加';
   document.getElementById('btnPdfTreePrune').textContent = '✂️ 配置図クリックで剪定予定の木を追加';
   document.getElementById('btnMowDraw').textContent = '🌿 配置図クリックで草刈りエリアを描く';
+  document.getElementById('btnRepairAddMode').textContent = '🔧 配置図クリックで修繕箇所を追加';
   document.getElementById('mowDrawActions').style.display = mowDrawMode ? 'flex' : 'none';
   if (mowDrawMode) document.getElementById('btnMowDraw').textContent = `🖱️ クリックで頂点を追加中...（${mowDraftPoints.length}点）`;
 }
@@ -4588,14 +4816,26 @@ function resetPdfModeButtons() {
 document.getElementById('btnPinAddMode').addEventListener('click', () => {
   pinAddMode = !pinAddMode;
   pdfTreeAddMode = null;
+  repairAddMode = false;
   mowDrawMode = false; mowDraftPoints = [];
   resetPdfModeButtons();
   if (pinAddMode) document.getElementById('btnPinAddMode').textContent = '🖱️ 配置図をクリックしてピンを配置...（再クリックでキャンセル）';
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
 
+document.getElementById('btnRepairAddMode').addEventListener('click', () => {
+  repairAddMode = !repairAddMode;
+  pinAddMode = false;
+  pdfTreeAddMode = null;
+  mowDrawMode = false; mowDraftPoints = [];
+  resetPdfModeButtons();
+  if (repairAddMode) document.getElementById('btnRepairAddMode').textContent = '🖱️ 配置図をクリックして修繕箇所を配置...（再クリックでキャンセル）';
+  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+});
+
 function armPdfTreeAddMode(type) {
   pinAddMode = false;
+  repairAddMode = false;
   mowDrawMode = false; mowDraftPoints = [];
   pdfTreeAddMode = (pdfTreeAddMode === type) ? null : type;
   resetPdfModeButtons();
@@ -4611,6 +4851,7 @@ document.getElementById('btnMowDraw').addEventListener('click', () => {
   mowDraftPoints = [];
   pinAddMode = false;
   pdfTreeAddMode = null;
+  repairAddMode = false;
   resetPdfModeButtons();
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
@@ -4703,6 +4944,26 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
       });
     }
     pdfTreeAddMode = null;
+    resetPdfModeButtons();
+    return;
+  }
+
+  if (repairAddMode) {
+    ensureRepairShape(gs);
+    const label = prompt('修繕箇所の名称・内容を入力してください（例: フェンス破損）', '修繕箇所' + (gs.repairSpots.length + 1));
+    if (label) {
+      const amountStr = prompt('見積額（円・わかればで結構です。空欄可）', '');
+      gs.repairSpots.push({
+        id: uid(), label, x, y,
+        amount: (amountStr && amountStr.trim() !== '' && !isNaN(Number(amountStr))) ? Number(amountStr) : null,
+        budgetCategory: budgetCategories.find(c => c.includes('修繕')) || budgetCategories[0] || null,
+        consumedBy: null, photo: null, photoId: null
+      });
+      save();
+      renderPdfPins(gs);
+      renderBudgetCard(gs);
+    }
+    repairAddMode = false;
     resetPdfModeButtons();
     return;
   }
@@ -4931,7 +5192,8 @@ function renderSummary() {
         (r.items || []).forEach(item => { if (item.budgetCategory === cat) spent += Number(item.cost || 0); });
       });
       const plannedSum = collectPlannedTreeWorks(gs, cat, y).reduce((s, p) => s + Number(p.work.amount || 0), 0)
-        + collectPlannedMowAreas(gs, cat).reduce((s, a) => s + Number(a.amount || 0), 0);
+        + collectPlannedMowAreas(gs, cat).reduce((s, a) => s + Number(a.amount || 0), 0)
+        + collectPlannedRepairSpots(gs, cat).reduce((s, x) => s + Number(x.amount || 0), 0);
       return { cat, spent: spent + plannedSum, plannedSum };
     }).filter(c => c.spent > 0);
     const envSpent = records.reduce((s, r) => {
