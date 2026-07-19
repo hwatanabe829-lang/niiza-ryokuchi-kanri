@@ -210,7 +210,11 @@
     background: white;
     overflow: auto;
     max-height: 320px;
+    cursor: grab;       /* マウスのドラッグで図面を移動できる */
+    user-select: none;  /* ドラッグ中に文字選択にならないように */
+    -webkit-user-select: none;
   }
+  #pdfCanvasHolder:active { cursor: grabbing; }
   #pdfCanvasHolder canvas { display: block; max-width: 100%; }
   .pdf-pin {
     position: absolute;
@@ -936,7 +940,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16g</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16h</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -956,7 +960,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19d</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19e</p>
   </div>
 </div>
 
@@ -1059,7 +1063,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16g</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16h</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -4317,7 +4321,7 @@ function applyPlanZoom() {
   const canvas = document.getElementById('pdfCanvas');
   const holder = document.getElementById('pdfCanvasHolder');
   const label = document.getElementById('planZoomLabel');
-  if (label) label.textContent = '×' + planZoom;
+  if (label) label.textContent = '×' + (Math.round(planZoom * 10) / 10);
   if (planZoom <= 1) {
     canvas.style.maxWidth = '100%';
     canvas.style.width = '';
@@ -4335,6 +4339,58 @@ document.getElementById('btnPlanZoomOut').addEventListener('click', () => {
   planZoom = Math.max(1, planZoom - 1);
   applyPlanZoom();
 });
+
+// マウスホイールで図面をズーム（カーソルの位置を中心に拡大縮小する）
+document.getElementById('pdfCanvasHolder').addEventListener('wheel', (e) => {
+  const gs = getGreen(currentId);
+  if (!gs || !gs.pdf) return;
+  e.preventDefault();
+  const holder = document.getElementById('pdfCanvasHolder');
+  const canvas = document.getElementById('pdfCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const fx = (e.clientX - rect.left) / rect.width;   // カーソル位置（図面上の割合）
+  const fy = (e.clientY - rect.top) / rect.height;
+  const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+  const next = Math.min(4, Math.max(1, planZoom * factor));
+  if (next === planZoom) return;
+  planZoom = next;
+  applyPlanZoom();
+  // ズーム後もカーソル下の場所が動かないようスクロール位置を補正する
+  const nrect = canvas.getBoundingClientRect();
+  holder.scrollLeft += (nrect.left + fx * nrect.width) - e.clientX;
+  holder.scrollTop += (nrect.top + fy * nrect.height) - e.clientY;
+}, { passive: false });
+
+// マウスのドラッグで図面を移動する。ドラッグした直後のクリックは
+// 配置やジャンプと誤認しないよう抑止する（5px以上動いたらドラッグ扱い）
+(() => {
+  const holder = document.getElementById('pdfCanvasHolder');
+  let dragging = false, dragMoved = false, sx = 0, sy = 0, sl = 0, st = 0;
+  holder.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true; dragMoved = false;
+    sx = e.clientX; sy = e.clientY;
+    sl = holder.scrollLeft; st = holder.scrollTop;
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragMoved = true;
+    if (dragMoved) {
+      holder.scrollLeft = sl - dx;
+      holder.scrollTop = st - dy;
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  holder.addEventListener('click', (e) => {
+    if (dragMoved) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      dragMoved = false;
+    }
+  }, true);
+})();
 
 // 図面の全画面モード: プロットしやすいよう図面セクションを画面いっぱいに広げて中央表示する。
 // スマホ（狭い画面）では配置モードのボタンを押すと自動で全画面になる。
