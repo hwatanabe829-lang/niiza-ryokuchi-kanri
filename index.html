@@ -469,7 +469,7 @@
     padding: 1px 5px;
     border-radius: 3px;
     white-space: nowrap;
-    pointer-events: none;
+    cursor: pointer; /* ラベルのタップでも下のメモピン一覧へ飛べる（ピンより大きく押しやすい） */
     margin-top: -22px;
   }
   .pin-item {
@@ -903,7 +903,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16d</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16e</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -923,7 +923,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19b</p>
   </div>
 </div>
 
@@ -1026,7 +1026,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16d</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16e</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -4464,11 +4464,23 @@ function renderPdfPins(gs) {
   }
 
   (gs.pdfPins || []).forEach(p => {
+    // ピン・ラベルのどちらをタップしても、下のメモピン一覧の該当行へ飛ぶ
+    const jumpToPinRow = (e) => {
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      e.stopPropagation();
+      const row = document.querySelector(`[data-pin-row="${p.id}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('flash');
+        setTimeout(() => row.classList.remove('flash'), 2000);
+      }
+    };
     const pin = document.createElement('div');
     pin.className = 'pdf-pin' + (p.label.includes('伐採') ? ' tree' : (p.label.includes('剪定') ? ' prune' : ''));
     pin.style.left = p.x + '%';
     pin.style.top = p.y + '%';
-    pin.title = p.label;
+    pin.title = `${p.label} クリックで下の詳細へ`;
+    pin.addEventListener('click', jumpToPinRow);
     layer.appendChild(pin);
 
     const label = document.createElement('div');
@@ -4476,6 +4488,7 @@ function renderPdfPins(gs) {
     label.style.left = p.x + '%';
     label.style.top = p.y + '%';
     label.textContent = p.label;
+    label.addEventListener('click', jumpToPinRow);
     layer.appendChild(label);
   });
   // Tree markers plotted directly on this site plan (x/y are % positions on the canvas)
@@ -4762,7 +4775,7 @@ function renderPinList(gs) {
     return;
   }
   wrap.innerHTML = gs.pdfPins.map(p =>
-    `<div class="pin-item"><span>📍 ${escapeHtml(p.label)}</span>
+    `<div class="pin-item" data-pin-row="${p.id}"><span>📍 ${escapeHtml(p.label)}</span>
       <button class="outline" data-pin-photo-btn="${p.id}" title="このスポットの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-pin-photo="${p.id}" style="display:none;">
       ${p.photo ? `<img class="spot-photo-thumb" src="${p.photo}" data-pin-photo-view="${p.id}" title="タップで拡大">` : ''}
