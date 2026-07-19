@@ -277,6 +277,37 @@
     white-space: nowrap;
     cursor: pointer; /* ラベルのタップでも下の草刈り一覧へ飛べる */
   }
+  /* 図面の全画面モード: プロット作業がしやすいよう、図面セクションを画面いっぱいに広げる */
+  .pdf-wrap.fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 4500; /* スマホの✕ボタン(4000)より上、ログイン画面(5000)より下 */
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    overflow-y: auto;
+    background: #fafafa;
+    padding: 8px 10px 60px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pdf-wrap.fullscreen > .field { display: none; } /* 全画面中はアップロード欄を隠して図面を優先 */
+  .pdf-wrap.fullscreen #planZoomBar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fafafa;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .pdf-wrap.fullscreen #pdfCanvasHolder {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;      /* 大きく中央に表示 */
+    max-height: none;    /* 高さ制限を外して図面全体を見せる */
+  }
+  #btnPlanFullscreen { font-weight: bold; }
+  .pdf-wrap.fullscreen #btnPlanFullscreen { background: #2e7d32; color: white; border-color: #2e7d32; }
   .mow-alert-bar {
     background: #fff8e1;
     border: 1px solid #ffb300;
@@ -905,7 +936,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16f</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16g</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -925,7 +956,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19c</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19d</p>
   </div>
 </div>
 
@@ -1028,7 +1059,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16f</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16g</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1059,6 +1090,7 @@
     <div class="editing-banner" id="roundFilterBanner"></div>
     <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
     <div id="planZoomBar" style="display:none; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
+      <button class="outline" id="btnPlanFullscreen" style="min-height:0; padding:4px 12px;">⛶ 全画面で図面を操作</button>
       <button class="outline" id="btnPlanZoomOut" style="min-height:0; padding:4px 14px;">🔍－</button>
       <button class="outline" id="btnPlanZoomIn" style="min-height:0; padding:4px 14px;">🔍＋</button>
       <span id="planZoomLabel" style="font-size:12px; color:#555; font-weight:bold;">×1</span>
@@ -4304,6 +4336,29 @@ document.getElementById('btnPlanZoomOut').addEventListener('click', () => {
   applyPlanZoom();
 });
 
+// 図面の全画面モード: プロットしやすいよう図面セクションを画面いっぱいに広げて中央表示する。
+// スマホ（狭い画面）では配置モードのボタンを押すと自動で全画面になる。
+let planFullscreen = false;
+function setPlanFullscreen(on) {
+  planFullscreen = !!on;
+  document.querySelector('.pdf-wrap').classList.toggle('fullscreen', planFullscreen);
+  const btn = document.getElementById('btnPlanFullscreen');
+  btn.textContent = planFullscreen ? '✕ 全画面を閉じる' : '⛶ 全画面で図面を操作';
+  applyPlanZoom(); // 全画面では基準幅が変わるためズームを掛け直す
+  if (planFullscreen) {
+    const holder = document.getElementById('pdfCanvasHolder');
+    if (holder) holder.scrollIntoView({ block: 'start' });
+  }
+}
+document.getElementById('btnPlanFullscreen').addEventListener('click', () => setPlanFullscreen(!planFullscreen));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && planFullscreen) setPlanFullscreen(false);
+});
+// 配置モードを開始した時、スマホ幅なら自動で全画面にする（図面への落とし込みを楽に）
+function autoFullscreenForPlot() {
+  if (!planFullscreen && window.innerWidth <= 768) setPlanFullscreen(true);
+}
+
 function renderPdfSection(gs) {
   const fileNameEl = document.getElementById('pdfFileName');
   const holder = document.getElementById('pdfCanvasHolder');
@@ -4317,6 +4372,7 @@ function renderPdfSection(gs) {
   renderTreeMoveBanner(gs);
   resetPdfModeButtons();
   planZoom = 1;
+  if (planFullscreen) setPlanFullscreen(false); // 緑地を開き直したら全画面は解除
   applyPlanZoom();
 
   if (!gs.pdf) {
@@ -4395,6 +4451,8 @@ function jumpToTreeCard(treeId) {
   const inp = document.querySelector(`input[data-diameter="${treeId}"]`);
   const card = inp && inp.closest('.tree-card');
   if (!card) return;
+  // 木のカードは図面セクションの外にあるため、全画面中なら先に閉じてから飛ぶ
+  if (planFullscreen) setPlanFullscreen(false);
   card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   card.classList.add('flash');
   setTimeout(() => card.classList.remove('flash'), 2000);
@@ -4848,7 +4906,10 @@ document.getElementById('btnPinAddMode').addEventListener('click', () => {
   repairAddMode = false;
   mowDrawMode = false; mowDraftPoints = [];
   resetPdfModeButtons();
-  if (pinAddMode) document.getElementById('btnPinAddMode').textContent = '🖱️ 配置図をクリックしてピンを配置...（再クリックでキャンセル）';
+  if (pinAddMode) {
+    document.getElementById('btnPinAddMode').textContent = '🖱️ 配置図をクリックしてピンを配置...（再クリックでキャンセル）';
+    autoFullscreenForPlot();
+  }
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
 
@@ -4858,7 +4919,10 @@ document.getElementById('btnRepairAddMode').addEventListener('click', () => {
   pdfTreeAddMode = null;
   mowDrawMode = false; mowDraftPoints = [];
   resetPdfModeButtons();
-  if (repairAddMode) document.getElementById('btnRepairAddMode').textContent = '🖱️ 配置図をクリックして修繕箇所を配置...（再クリックでキャンセル）';
+  if (repairAddMode) {
+    document.getElementById('btnRepairAddMode').textContent = '🖱️ 配置図をクリックして修繕箇所を配置...（再クリックでキャンセル）';
+    autoFullscreenForPlot();
+  }
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
 
@@ -4870,6 +4934,7 @@ function armPdfTreeAddMode(type) {
   resetPdfModeButtons();
   if (pdfTreeAddMode === '伐採') document.getElementById('btnPdfTreeFell').textContent = '🖱️ クリックして伐採予定の木を配置...（再クリックでキャンセル）';
   if (pdfTreeAddMode === '剪定') document.getElementById('btnPdfTreePrune').textContent = '🖱️ クリックして剪定予定の木を配置...（再クリックでキャンセル）';
+  if (pdfTreeAddMode) autoFullscreenForPlot();
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 }
 document.getElementById('btnPdfTreeFell').addEventListener('click', () => armPdfTreeAddMode('伐採'));
@@ -4882,6 +4947,7 @@ document.getElementById('btnMowDraw').addEventListener('click', () => {
   pdfTreeAddMode = null;
   repairAddMode = false;
   resetPdfModeButtons();
+  if (mowDrawMode) autoFullscreenForPlot();
   const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
 });
 document.getElementById('btnMowCancel').addEventListener('click', () => {
