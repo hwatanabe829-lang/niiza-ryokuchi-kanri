@@ -254,6 +254,8 @@
     fill: rgba(139,195,74,0.35);
     stroke: #558b2f;
     stroke-width: 0.6;
+    pointer-events: auto; /* エリアのタップで下の草刈り一覧へ飛べる */
+    cursor: pointer;
   }
   .mow-area-svg polygon.done {
     fill: rgba(158,158,158,0.25);
@@ -273,7 +275,7 @@
     padding: 1px 6px;
     border-radius: 3px;
     white-space: nowrap;
-    pointer-events: none;
+    cursor: pointer; /* ラベルのタップでも下の草刈り一覧へ飛べる */
   }
   .mow-alert-bar {
     background: #fff8e1;
@@ -903,7 +905,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16e</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16f</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -923,7 +925,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19c</p>
   </div>
 </div>
 
@@ -1026,7 +1028,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16e</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16f</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -4439,10 +4441,22 @@ function renderPdfPins(gs) {
     svg.setAttribute('class', 'mow-area-svg');
     svg.setAttribute('viewBox', '0 0 100 100');
     svg.setAttribute('preserveAspectRatio', 'none');
+    // エリアの塗り・ラベルのどちらをタップしても、下の草刈りエリア一覧の該当行へ飛ぶ
+    const jumpToMowRow = (a) => (e) => {
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      e.stopPropagation();
+      const row = document.querySelector(`[data-mow-row="${a.id}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('flash');
+        setTimeout(() => row.classList.remove('flash'), 2000);
+      }
+    };
     visibleAreas.forEach(a => {
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       poly.setAttribute('points', a.points.map(p => `${p.x},${p.y}`).join(' '));
       if (a.consumedBy) poly.setAttribute('class', 'done');
+      poly.addEventListener('click', jumpToMowRow(a));
       svg.appendChild(poly);
     });
     if (mowDraftPoints.length) {
@@ -4459,6 +4473,8 @@ function renderPdfPins(gs) {
       lbl.style.left = c.x + '%';
       lbl.style.top = c.y + '%';
       lbl.textContent = `🌿${a.label}${a.sqm ? ` ${a.sqm}㎡` : ''}${a.amount != null ? ` ¥${Number(a.amount).toLocaleString()}` : ''}${a.consumedBy ? '（記録済）' : ''}`;
+      lbl.title = `${a.label} クリックで下の詳細へ`;
+      lbl.addEventListener('click', jumpToMowRow(a));
       layer.appendChild(lbl);
     });
   }
@@ -4553,7 +4569,7 @@ function renderMowAreaList(gs) {
     return;
   }
   wrap.innerHTML = '<label style="font-size:12px; color:#555;">🌿 草刈りエリア（面積を入れると工法の単価で見積額を自動計算）</label>' + gs.mowAreas.map(a => `
-    <div class="pin-item">
+    <div class="pin-item" data-mow-row="${a.id}">
       <span>🌿 ${escapeHtml(a.label)}</span>
       <button class="outline" data-mow-rename="${a.id}" title="エリア名を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
       <input type="number" data-mow-sqm="${a.id}" value="${a.sqm != null ? a.sqm : ''}" placeholder="㎡" style="width:70px; font-size:12px; padding:2px 4px;">
