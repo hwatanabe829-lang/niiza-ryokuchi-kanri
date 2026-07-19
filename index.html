@@ -940,7 +940,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16i</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16j</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -960,7 +960,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19f</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19g</p>
   </div>
 </div>
 
@@ -1063,7 +1063,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16i</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16j</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1446,6 +1446,7 @@ let selectedRoundId = null; // record id whose site-plan trees are being isolate
 let mowDrawMode = false;    // clicking the site plan adds vertices of a new 草刈りエリア polygon
 let mowDraftPoints = [];    // vertices (%) of the polygon being drawn
 let treeMoveTargetId = null; // 誤タップした木を敷地図タップで置き直すモード（現場スマホ向け）
+let spotMoveTarget = null;   // {kind:'pin'|'repair'|'mow', id} メモピン・修繕箇所・草刈りエリアを図面タップで置き直すモード
 let markers = {};
 let treeMarkers = {};
 
@@ -2364,8 +2365,10 @@ function renderTreeMarkerList(gs) {
   wrap.querySelectorAll('button[data-move-tree]').forEach(btn => {
     btn.addEventListener('click', () => {
       treeMoveTargetId = (treeMoveTargetId === btn.dataset.moveTree) ? null : btn.dataset.moveTree;
+      spotMoveTarget = null;
       pinAddMode = false;
       pdfTreeAddMode = null;
+      repairAddMode = false;
       mowDrawMode = false; mowDraftPoints = [];
       resetPdfModeButtons();
       renderTreeMoveBanner(gs);
@@ -2376,20 +2379,49 @@ function renderTreeMarkerList(gs) {
   });
 }
 
-// 位置修正モード中は敷地図の上に案内バナーを出す（現場でどの木を動かしているか迷わないように）
+// メモピン・修繕箇所・草刈りエリアの「📍 位置」ボタン共通処理: 図面タップで置き直すモードにする
+function armSpotMove(gs, kind, id) {
+  spotMoveTarget = (spotMoveTarget && spotMoveTarget.kind === kind && spotMoveTarget.id === id) ? null : { kind, id };
+  treeMoveTargetId = null;
+  pinAddMode = false;
+  pdfTreeAddMode = null;
+  repairAddMode = false;
+  mowDrawMode = false; mowDraftPoints = [];
+  resetPdfModeButtons();
+  renderTreeMoveBanner(gs);
+  if (spotMoveTarget) {
+    document.getElementById('pdfCanvasHolder').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// 位置修正モード中は敷地図の上に案内バナーを出す（現場で何を動かしているか迷わないように）
 function renderTreeMoveBanner(gs) {
   const banner = document.getElementById('treeMoveBanner');
   const t = treeMoveTargetId && gs ? (gs.treeMarkers || []).find(x => x.id === treeMoveTargetId) : null;
-  if (!t) {
+  let spotLabel = null;
+  if (!t && spotMoveTarget && gs) {
+    if (spotMoveTarget.kind === 'pin') {
+      const p = (gs.pdfPins || []).find(x => x.id === spotMoveTarget.id);
+      if (p) spotLabel = `📍 ピン「${p.label}」`;
+    } else if (spotMoveTarget.kind === 'repair') {
+      const s = (gs.repairSpots || []).find(x => x.id === spotMoveTarget.id);
+      if (s) spotLabel = `🔧 修繕箇所「${s.label}」`;
+    } else if (spotMoveTarget.kind === 'mow') {
+      const a = (gs.mowAreas || []).find(x => x.id === spotMoveTarget.id);
+      if (a) spotLabel = `🌿 草刈りエリア「${a.label}」（エリア全体が動きます）`;
+    }
+  }
+  if (!t && !spotLabel) {
     banner.style.display = 'none';
     banner.innerHTML = '';
     return;
   }
   banner.style.display = 'block';
-  banner.innerHTML = `📍 「${escapeHtml(t.label)}」の新しい位置を敷地図でタップしてください　`
+  banner.innerHTML = `📍 ${t ? `「${escapeHtml(t.label)}」` : escapeHtml(spotLabel)}の新しい位置を敷地図でタップしてください　`
     + `<button class="secondary" id="btnCancelTreeMove">キャンセル</button>`;
   document.getElementById('btnCancelTreeMove').addEventListener('click', () => {
     treeMoveTargetId = null;
+    spotMoveTarget = null;
     renderTreeMoveBanner(gs);
   });
 }
@@ -4425,6 +4457,7 @@ function renderPdfSection(gs) {
   repairAddMode = false;
   mowDrawMode = false; mowDraftPoints = [];
   treeMoveTargetId = null;
+  spotMoveTarget = null;
   renderTreeMoveBanner(gs);
   resetPdfModeButtons();
   planZoom = 1;
@@ -4557,7 +4590,7 @@ function renderPdfPins(gs) {
     svg.setAttribute('preserveAspectRatio', 'none');
     // エリアの塗り・ラベルのどちらをタップしても、下の草刈りエリア一覧の該当行へ飛ぶ
     const jumpToMowRow = (a) => (e) => {
-      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
       e.stopPropagation();
       const row = document.querySelector(`[data-mow-row="${a.id}"]`);
       if (row) {
@@ -4596,7 +4629,7 @@ function renderPdfPins(gs) {
   (gs.pdfPins || []).forEach(p => {
     // ピン・ラベルのどちらをタップしても、下のメモピン一覧の該当行へ飛ぶ
     const jumpToPinRow = (e) => {
-      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
       e.stopPropagation();
       const row = document.querySelector(`[data-pin-row="${p.id}"]`);
       if (row) {
@@ -4634,7 +4667,7 @@ function renderPdfPins(gs) {
       icon.title = `${t.label}（${treeWorksSummary(t)}）クリックで下の詳細へ`;
       icon.addEventListener('click', (e) => {
         // 配置・描画モード中は図面クリックの邪魔をしない
-        if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+        if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
         e.stopPropagation();
         jumpToTreeCard(t.id);
       });
@@ -4659,7 +4692,7 @@ function renderPdfPins(gs) {
     icon.textContent = '🔧';
     icon.title = `${s.label}${s.amount != null ? `（¥${Number(s.amount).toLocaleString()}）` : ''}${s.consumedBy ? '（記録済）' : ''}クリックで下の詳細へ`;
     icon.addEventListener('click', (e) => {
-      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId) return;
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
       e.stopPropagation();
       const row = document.querySelector(`[data-repair-row="${s.id}"]`);
       if (row) {
@@ -4686,6 +4719,7 @@ function renderMowAreaList(gs) {
     <div class="pin-item" data-mow-row="${a.id}">
       <span>🌿 ${escapeHtml(a.label)}</span>
       <button class="outline" data-mow-rename="${a.id}" title="エリア名を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
+      <button class="outline" data-mow-move="${a.id}" title="図面をタップした場所へエリア全体を移動する" style="min-height:0; padding:2px 6px; font-size:12px;">📍</button>
       <input type="number" data-mow-sqm="${a.id}" value="${a.sqm != null ? a.sqm : ''}" placeholder="㎡" style="width:70px; font-size:12px; padding:2px 4px;">
       <select data-mow-method="${a.id}" title="草刈りの工法（単価が異なります）" style="font-size:12px; padding:2px; max-width:150px;">
         ${MOW_METHODS.map(m => `<option value="${escapeHtml(m)}" ${(a.mowMethod || DEFAULT_MOW_METHOD) === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
@@ -4753,6 +4787,9 @@ function renderMowAreaList(gs) {
       save();
       if (changed) { renderMowAreaList(gs); renderPdfPins(gs); renderBudgetCard(gs); }
     });
+  });
+  wrap.querySelectorAll('button[data-mow-move]').forEach(btn => {
+    btn.addEventListener('click', () => armSpotMove(gs, 'mow', btn.dataset.mowMove));
   });
   wrap.querySelectorAll('button[data-mow-rename]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4822,6 +4859,7 @@ function renderRepairList(gs) {
     <div class="pin-item" data-repair-row="${s.id}">
       <span>🔧 ${escapeHtml(s.label)}</span>
       <button class="outline" data-repair-rename="${s.id}" title="名称を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
+      <button class="outline" data-repair-move="${s.id}" title="図面をタップして位置を置き直す" style="min-height:0; padding:2px 6px; font-size:12px;">📍</button>
       <span class="amount-label">見積額（円）</span>
       <input type="number" data-repair-amount="${s.id}" value="${s.amount != null ? s.amount : ''}" placeholder="円" style="width:90px; font-size:12px; padding:2px 4px;">
       <select data-repair-budget="${s.id}" style="font-size:12px; padding:2px;">
@@ -4834,6 +4872,9 @@ function renderRepairList(gs) {
       <button class="danger" data-repair-del="${s.id}">削除</button>
     </div>
   `).join('');
+  wrap.querySelectorAll('button[data-repair-move]').forEach(btn => {
+    btn.addEventListener('click', () => armSpotMove(gs, 'repair', btn.dataset.repairMove));
+  });
   wrap.querySelectorAll('button[data-repair-rename]').forEach(btn => {
     btn.addEventListener('click', () => {
       const s = gs.repairSpots.find(x => x.id === btn.dataset.repairRename);
@@ -4907,6 +4948,7 @@ function renderPinList(gs) {
   wrap.innerHTML = gs.pdfPins.map(p =>
     `<div class="pin-item" data-pin-row="${p.id}"><span>📍 ${escapeHtml(p.label)}</span>
       <button class="outline" data-pin-rename="${p.id}" title="名称・説明を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️ 編集</button>
+      <button class="outline" data-pin-move="${p.id}" title="図面をタップして位置を置き直す" style="min-height:0; padding:2px 6px; font-size:12px;">📍 位置</button>
       <button class="outline" data-pin-photo-btn="${p.id}" title="このスポットの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-pin-photo="${p.id}" style="display:none;">
       ${p.photo ? `<img class="spot-photo-thumb" src="${p.photo}" data-pin-photo-view="${p.id}" title="タップで拡大">` : ''}
@@ -4918,6 +4960,9 @@ function renderPinList(gs) {
       save();
       renderPdfPins(gs);
     });
+  });
+  wrap.querySelectorAll('button[data-pin-move]').forEach(btn => {
+    btn.addEventListener('click', () => armSpotMove(gs, 'pin', btn.dataset.pinMove));
   });
   // メモピンの名称・説明の変更
   wrap.querySelectorAll('button[data-pin-rename]').forEach(btn => {
@@ -4979,7 +5024,8 @@ document.getElementById('btnPinAddMode').addEventListener('click', () => {
     document.getElementById('btnPinAddMode').textContent = '🖱️ 配置図をクリックしてピンを配置...（再クリックでキャンセル）';
     autoFullscreenForPlot();
   }
-  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+  treeMoveTargetId = null; spotMoveTarget = null;
+  const gs = getGreen(currentId); if (gs) { renderTreeMoveBanner(gs); renderPdfPins(gs); }
 });
 
 document.getElementById('btnRepairAddMode').addEventListener('click', () => {
@@ -4992,7 +5038,8 @@ document.getElementById('btnRepairAddMode').addEventListener('click', () => {
     document.getElementById('btnRepairAddMode').textContent = '🖱️ 配置図をクリックして修繕箇所を配置...（再クリックでキャンセル）';
     autoFullscreenForPlot();
   }
-  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+  treeMoveTargetId = null; spotMoveTarget = null;
+  const gs = getGreen(currentId); if (gs) { renderTreeMoveBanner(gs); renderPdfPins(gs); }
 });
 
 function armPdfTreeAddMode(type) {
@@ -5004,7 +5051,8 @@ function armPdfTreeAddMode(type) {
   if (pdfTreeAddMode === '伐採') document.getElementById('btnPdfTreeFell').textContent = '🖱️ クリックして伐採予定の木を配置...（再クリックでキャンセル）';
   if (pdfTreeAddMode === '剪定') document.getElementById('btnPdfTreePrune').textContent = '🖱️ クリックして剪定予定の木を配置...（再クリックでキャンセル）';
   if (pdfTreeAddMode) autoFullscreenForPlot();
-  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+  treeMoveTargetId = null; spotMoveTarget = null;
+  const gs = getGreen(currentId); if (gs) { renderTreeMoveBanner(gs); renderPdfPins(gs); }
 }
 document.getElementById('btnPdfTreeFell').addEventListener('click', () => armPdfTreeAddMode('伐採'));
 document.getElementById('btnPdfTreePrune').addEventListener('click', () => armPdfTreeAddMode('剪定'));
@@ -5017,12 +5065,14 @@ document.getElementById('btnMowDraw').addEventListener('click', () => {
   repairAddMode = false;
   resetPdfModeButtons();
   if (mowDrawMode) autoFullscreenForPlot();
-  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+  treeMoveTargetId = null; spotMoveTarget = null;
+  const gs = getGreen(currentId); if (gs) { renderTreeMoveBanner(gs); renderPdfPins(gs); }
 });
 document.getElementById('btnMowCancel').addEventListener('click', () => {
   mowDrawMode = false; mowDraftPoints = [];
   resetPdfModeButtons();
-  const gs = getGreen(currentId); if (gs) renderPdfPins(gs);
+  treeMoveTargetId = null; spotMoveTarget = null;
+  const gs = getGreen(currentId); if (gs) { renderTreeMoveBanner(gs); renderPdfPins(gs); }
 });
 document.getElementById('btnMowConfirm').addEventListener('click', () => {
   const gs = getGreen(currentId);
@@ -5068,6 +5118,36 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
       renderPdfPins(gs);
     }
     treeMoveTargetId = null;
+    renderTreeMoveBanner(gs);
+    return;
+  }
+
+  // メモピン・修繕箇所・草刈りエリアの位置修正: タップした場所へ置き直す
+  if (spotMoveTarget) {
+    const { kind, id } = spotMoveTarget;
+    if (kind === 'pin') {
+      const p = (gs.pdfPins || []).find(q => q.id === id);
+      if (p) { p.x = x; p.y = y; }
+    } else if (kind === 'repair') {
+      const s = (gs.repairSpots || []).find(q => q.id === id);
+      if (s) { s.x = x; s.y = y; }
+    } else if (kind === 'mow') {
+      // エリアは形を保ったまま、タップした場所が中心になるよう全体を平行移動する
+      const a = (gs.mowAreas || []).find(q => q.id === id);
+      if (a && a.points && a.points.length) {
+        const cen = mowAreaCentroid(a.points);
+        let dx = x - cen.x, dy = y - cen.y;
+        // 図面からはみ出さない範囲に移動量を抑える
+        const minX = Math.min(...a.points.map(p => p.x)), maxX = Math.max(...a.points.map(p => p.x));
+        const minY = Math.min(...a.points.map(p => p.y)), maxY = Math.max(...a.points.map(p => p.y));
+        dx = Math.max(-minX, Math.min(100 - maxX, dx));
+        dy = Math.max(-minY, Math.min(100 - maxY, dy));
+        a.points = a.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      }
+    }
+    spotMoveTarget = null;
+    save();
+    renderPdfPins(gs);
     renderTreeMoveBanner(gs);
     return;
   }
