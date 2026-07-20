@@ -213,6 +213,7 @@
     cursor: grab;       /* マウスのドラッグで図面を移動できる */
     user-select: none;  /* ドラッグ中に文字選択にならないように */
     -webkit-user-select: none;
+    touch-action: pan-x pan-y; /* 1本指スクロールはそのまま、2本指ピンチはアプリ側でズーム処理 */
   }
   #pdfCanvasHolder:active { cursor: grabbing; }
   #pdfCanvasHolder canvas { display: block; max-width: 100%; }
@@ -235,6 +236,12 @@
     line-height: 1;
     cursor: pointer;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+    /* 長押しでの位置修正をスマホで確実に効かせる:
+       アイコン上ではスクロールを始めさせず、iOSの長押しメニューも抑止する */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   .pdf-tree-amount-label {
     position: absolute;
@@ -960,7 +967,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16k</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16l</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -980,7 +987,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20b</p>
   </div>
 </div>
 
@@ -1083,7 +1090,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16k</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16l</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1443,6 +1450,17 @@ function autoCalcMowAmount(gs, a) {
   if (p == null || a.sqm == null || a.sqm === '') return false;
   a.amount = Math.round(p * Number(a.sqm));
   return true;
+}
+
+// 見積額欄はカンマ付き（9,603など）で表示する。読み取る時はカンマ・空白を除いて数値化する
+function parseAmountInput(v) {
+  const s = String(v).replace(/[,，\s]/g, '');
+  if (s === '') return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+function formatAmountInput(v) {
+  return v != null && v !== '' ? Number(v).toLocaleString() : '';
 }
 
 // 見積額の横に出す契約単価の説明。単価が求められない時は理由を返す（なぜ自動計算されないかを現場で分かるように）
@@ -2268,7 +2286,7 @@ function renderTreeMarkerList(gs) {
               <option value="manual" ${w.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
             </select>
             <span class="amount-label">見積額</span>
-            <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="例: 9603" style="width:95px;">
+            <input type="text" inputmode="numeric" data-work-amount="${t.id}|${w.id}" value="${formatAmountInput(w.amount)}" placeholder="例: 9,603" style="width:95px;">
             <span class="amount-label">円</span>
             ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}" data-work-calc="${t.id}|${w.id}" title="タップで単価計算の内訳を表示" style="cursor:pointer;">🧮 ${escapeHtml(pl)}</span>`)(workUnitPriceLabel(gs, t, w))}
             <select data-work-budget="${t.id}|${w.id}">
@@ -2352,7 +2370,7 @@ function renderTreeMarkerList(gs) {
       const t = gs.treeMarkers.find(x => x.id === treeId);
       const w = t && t.works.find(x => x.id === workId);
       if (!w) return;
-      w.amount = inp.value === '' ? null : Number(inp.value);
+      w.amount = parseAmountInput(inp.value);
       // 契約単価と違う金額を手で入れたら、自動計算に上書きされないよう「契約外」に切り替える
       if (w.amount != null && w.priceMode !== 'manual') {
         const p = unitPriceForWork(gs, t, w);
@@ -4527,6 +4545,39 @@ document.getElementById('pdfCanvasHolder').addEventListener('wheel', (e) => {
   holder.scrollTop += (nrect.top + fy * nrect.height) - e.clientY;
 }, { passive: false });
 
+// スマホの2本指ピンチで図面をズーム（アイコンの大きさは変えず、図面だけ拡大縮小する）
+(() => {
+  const holder = document.getElementById('pdfCanvasHolder');
+  let pinchStartDist = null, pinchStartZoom = 1;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  holder.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      pinchStartDist = dist(e.touches);
+      pinchStartZoom = planZoom;
+    }
+  }, { passive: true });
+  holder.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2 || !pinchStartDist) return;
+    e.preventDefault(); // ページ全体の拡大にせず、図面だけをズームする
+    const canvas = document.getElementById('pdfCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const fx = (midX - rect.left) / rect.width;
+    const fy = (midY - rect.top) / rect.height;
+    const next = Math.min(4, Math.max(1, pinchStartZoom * (dist(e.touches) / pinchStartDist)));
+    if (next === planZoom) return;
+    planZoom = next;
+    applyPlanZoom();
+    // ピンチの中心が動かないようスクロール位置を補正する
+    const nrect = canvas.getBoundingClientRect();
+    holder.scrollLeft += (nrect.left + fx * nrect.width) - midX;
+    holder.scrollTop += (nrect.top + fy * nrect.height) - midY;
+  }, { passive: false });
+  holder.addEventListener('touchend', () => { pinchStartDist = null; });
+  holder.addEventListener('touchcancel', () => { pinchStartDist = null; });
+})();
+
 // マウスのドラッグで図面を移動する。ドラッグした直後のクリックは
 // 配置やジャンプと誤認しないよう抑止する（5px以上動いたらドラッグ扱い）
 (() => {
@@ -4693,11 +4744,11 @@ function addLongPressMove(el, onLongPress) {
   });
   const cancel = () => clearTimeout(timer);
   el.addEventListener('pointermove', (e) => {
-    if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) cancel();
+    // 指の太さぶんの揺れではキャンセルしない（スマホで長押しが効かなくなるため閾値は広め）
+    if (Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) cancel();
   });
   el.addEventListener('pointerup', cancel);
   el.addEventListener('pointercancel', cancel);
-  el.addEventListener('pointerleave', cancel);
   el.addEventListener('contextmenu', (e) => e.preventDefault());
   el.addEventListener('click', (e) => {
     if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; }
@@ -4776,7 +4827,7 @@ function renderPdfPins(gs) {
       lbl.className = 'mow-area-label';
       lbl.style.left = c.x + '%';
       lbl.style.top = c.y + '%';
-      lbl.textContent = `🌿${a.label}${a.sqm ? ` ${a.sqm}㎡` : ''}${a.amount != null ? ` ¥${Number(a.amount).toLocaleString()}` : ''}${a.consumedBy ? '（記録済）' : ''}`;
+      lbl.textContent = `🌿${a.label}${a.sqm ? ` ${a.sqm}㎡` : ''}${a.consumedBy ? '（記録済）' : ''}`;
       lbl.title = `${a.label} クリックで下の詳細へ`;
       lbl.addEventListener('click', jumpToMowRow(a));
       layer.appendChild(lbl);
@@ -4839,15 +4890,7 @@ function renderPdfPins(gs) {
       });
       layer.appendChild(icon);
 
-      const currentWork = treeCurrentPendingWork(t);
-      if (currentWork && currentWork.amount != null) {
-        const amtLabel = document.createElement('div');
-        amtLabel.className = 'pdf-tree-amount-label';
-        amtLabel.style.left = t.x + '%';
-        amtLabel.style.top = t.y + '%';
-        amtLabel.textContent = '¥' + Number(currentWork.amount).toLocaleString();
-        layer.appendChild(amtLabel);
-      }
+      // 金額は図面上には出さない（各一覧の見積額欄と「今回の総見積額」で確認する）
     });
   // 修繕箇所（🔧）: タップで下の修繕リストの該当行へ
   (gs.repairSpots || []).filter(s => !allowedRepairIds || allowedRepairIds.has(s.id)).forEach(s => {
@@ -4905,7 +4948,7 @@ function renderMowAreaList(gs) {
         <option value="manual" ${a.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
       </select>
       <span class="amount-label">見積額</span>
-      <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="例: 40920" style="width:90px; font-size:12px; padding:2px 4px;">
+      <input type="text" inputmode="numeric" data-mow-amount="${a.id}" value="${formatAmountInput(a.amount)}" placeholder="例: 40,920" style="width:90px; font-size:12px; padding:2px 4px;">
       <span class="amount-label">円</span>
       ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}" data-mow-calc="${a.id}" title="タップで単価計算の内訳を表示" style="cursor:pointer;">🧮 ${escapeHtml(pl)}</span>`)(mowUnitPriceLabel(gs, a))}
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
@@ -4991,7 +5034,7 @@ function renderMowAreaList(gs) {
     inp.addEventListener('change', () => {
       const a = gs.mowAreas.find(x => x.id === inp.dataset.mowAmount);
       if (!a) return;
-      a.amount = inp.value === '' ? null : Number(inp.value);
+      a.amount = parseAmountInput(inp.value);
       // 契約単価による自動計算と違う金額を手で入れたら「契約外」に切り替える
       if (a.amount != null && a.priceMode !== 'manual') {
         const tbl = unitPrices[String(gs.selectedYear)];
@@ -5045,7 +5088,7 @@ function renderRepairList(gs) {
       <button class="outline" data-repair-rename="${s.id}" title="名称を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
       <button class="outline" data-repair-move="${s.id}" title="図面をタップして位置を置き直す" style="min-height:0; padding:2px 6px; font-size:12px;">📍</button>
       <span class="amount-label">見積額</span>
-      <input type="number" data-repair-amount="${s.id}" value="${s.amount != null ? s.amount : ''}" placeholder="例: 50000" style="width:90px; font-size:12px; padding:2px 4px;">
+      <input type="text" inputmode="numeric" data-repair-amount="${s.id}" value="${formatAmountInput(s.amount)}" placeholder="例: 50,000" style="width:90px; font-size:12px; padding:2px 4px;">
       <span class="amount-label">円</span>
       <select data-repair-budget="${s.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
@@ -5076,7 +5119,7 @@ function renderRepairList(gs) {
     inp.addEventListener('change', () => {
       const s = gs.repairSpots.find(x => x.id === inp.dataset.repairAmount);
       if (!s) return;
-      s.amount = inp.value === '' ? null : Number(inp.value);
+      s.amount = parseAmountInput(inp.value);
       save();
       renderPdfPins(gs);
       renderBudgetCard(gs);
