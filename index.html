@@ -732,7 +732,27 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     margin-bottom: 4px;
+    border-left: 4px solid #9e9e9e; /* 作業の種類ごとに色線で見分ける（下の凡例と同じ色） */
   }
+  .work-row.wr-fell { border-left-color: #c62828; }   /* 🪓伐採=赤 */
+  .work-row.wr-prune { border-left-color: #1565c0; }  /* ✂️剪定=青 */
+  #mowAreaList .pin-item { border-left: 4px solid #558b2f; }  /* 🌿草刈り=緑 */
+  #repairList .pin-item { border-left: 4px solid #ef6c00; }   /* 🔧修繕=オレンジ */
+  .plan-legend {
+    font-size: 12px;
+    color: #555;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin-top: 8px;
+    line-height: 1.9;
+  }
+  .plan-legend .lg { white-space: nowrap; margin-right: 10px; border-left: 4px solid #ccc; padding-left: 5px; }
+  .plan-legend .lg.fell { border-left-color: #c62828; }
+  .plan-legend .lg.prune { border-left-color: #1565c0; }
+  .plan-legend .lg.mow { border-left-color: #558b2f; }
+  .plan-legend .lg.repair { border-left-color: #ef6c00; }
   .work-row.done { background: #f1f8e9; }
   .work-row input[type="date"] { width: auto; padding: 2px 4px; font-size: 11px; }
   .work-row input[type="text"] { flex: 1; min-width: 80px; padding: 2px 4px; font-size: 11px; }
@@ -940,7 +960,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16j</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16k</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -960,7 +980,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-19g</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20a</p>
   </div>
 </div>
 
@@ -1063,7 +1083,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16j</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16k</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1118,6 +1138,15 @@
       </div>
       <button class="outline" id="btnRepairAddMode" style="width:100%; margin-top:8px;">🔧 配置図クリックで修繕箇所を追加</button>
       <button class="outline" id="btnPinAddMode" style="width:100%; margin-top:8px;">📍 クリックで通常のメモピンを追加</button>
+      <div class="plan-legend">
+        図面のマーク:
+        <span class="lg fell">🪓（伐採）</span>
+        <span class="lg prune">✂️（剪定）</span>
+        <span class="lg mow">🌿（草刈りエリア）</span>
+        <span class="lg repair">🔧（修繕箇所）</span>
+        <span class="lg">✅（対応済みの木）</span>
+        <br><small class="help" style="margin:0;">🪓✂️🔧のマークは<b>長押し</b>すると、そのまま位置の置き直しモードになります（タップは詳細へジャンプ）。</small>
+      </div>
       <div id="mowAreaList" style="margin-top:8px;"></div>
       <div id="repairList" style="margin-top:8px;"></div>
       <div id="pinList" style="margin-top:8px;"></div>
@@ -1150,6 +1179,7 @@
   </div>
   <button id="btnAddItem" style="width:100%; margin-bottom:10px;">＋ 項目を追加</button>
   <div id="itemListWrap"></div>
+  <div id="planEstimateTotal"></div>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -1432,6 +1462,97 @@ function mowUnitPriceLabel(gs, a) {
   const p = tbl.mow ? tbl.mow[a.mowMethod || DEFAULT_MOW_METHOD] : null;
   if (p == null) return '工法の単価が未登録→手入力';
   return `単価 ¥${Number(p).toLocaleString()}/㎡`;
+}
+
+// 🧮タップで見せる単価計算の内訳（どうやってこの見積額になったかを現場で確認できる）
+function workClassRangeLabel(classes, c) {
+  const n = Number(c);
+  for (let i = 0; i < classes.length; i++) {
+    if (n < classes[i]) return `${i === 0 ? 0 : classes[i - 1]}〜${classes[i]}cm未満`;
+  }
+  return `${classes[classes.length - 1]}cm以上（区分外）`;
+}
+function workCalcText(gs, tree, w) {
+  const kind = w.type === '剪定' ? `剪定（${w.subType || '強剪定'}・${w.foliage || '落葉樹'}）` : `伐採（${w.method || '人力'}）`;
+  let lines = [`【単価計算の内訳】${tree.label}`, `作業: ${kind}`, `年度: ${gs.selectedYear}年度の単価表`];
+  if (w.priceMode === 'manual') {
+    lines.push('区分: 契約外（手入力）', `見積額: ${w.amount != null ? '¥' + Number(w.amount).toLocaleString() : '未入力'}（手で入力した金額です）`);
+    return lines.join('\n');
+  }
+  if (!unitPrices[String(gs.selectedYear)]) {
+    lines.push(`${gs.selectedYear}年度の単価表が未登録のため自動計算できません。`, 'サイドバーの「単価表」から登録してください。');
+    return lines.join('\n');
+  }
+  if (tree.diameter == null || tree.diameter === '') {
+    lines.push('幹周が未入力のため計算できません。幹周c（cm）を入れると自動計算されます。');
+    return lines.join('\n');
+  }
+  const classes = w.type === '剪定' ? ((w.subType === '弱剪定') ? PRUNE_CLASSES_WEAK : PRUNE_CLASSES_STRONG) : FELL_CLASSES;
+  const p = unitPriceForWork(gs, tree, w);
+  lines.push(`幹周: c${tree.diameter}cm → 区分 c${workClassRangeLabel(classes, tree.diameter)}`);
+  if (p == null) {
+    lines.push('この区分の契約単価が無いため手入力になります（区分の上限超え、または単価未登録）。');
+  } else {
+    lines.push(`単価: ¥${Number(p).toLocaleString()}/本 × 1本`, `見積額: ¥${Math.round(p).toLocaleString()}`);
+  }
+  return lines.join('\n');
+}
+function mowCalcText(gs, a) {
+  const method = a.mowMethod || DEFAULT_MOW_METHOD;
+  let lines = [`【単価計算の内訳】${a.label}`, `作業: 草刈り（${method}）`, `年度: ${gs.selectedYear}年度の単価表`];
+  if (a.priceMode === 'manual') {
+    lines.push('区分: 契約外（手入力）', `見積額: ${a.amount != null ? '¥' + Number(a.amount).toLocaleString() : '未入力'}（手で入力した金額です）`);
+    return lines.join('\n');
+  }
+  const tbl = unitPrices[String(gs.selectedYear)];
+  if (!tbl) {
+    lines.push(`${gs.selectedYear}年度の単価表が未登録のため自動計算できません。`);
+    return lines.join('\n');
+  }
+  const p = tbl.mow ? tbl.mow[method] : null;
+  if (p == null) {
+    lines.push('この工法の単価が未登録のため手入力になります。');
+    return lines.join('\n');
+  }
+  if (a.sqm == null || a.sqm === '') {
+    lines.push(`単価: ¥${Number(p).toLocaleString()}/㎡`, '面積（㎡）が未入力のため計算できません。');
+    return lines.join('\n');
+  }
+  lines.push(`面積: ${a.sqm}㎡`, `計算: ¥${Number(p).toLocaleString()}/㎡ × ${a.sqm}㎡ = ¥${Math.round(p * Number(a.sqm)).toLocaleString()}`);
+  return lines.join('\n');
+}
+
+// 作業一覧の最後に出す「今回の総見積額」（まだ発注に入っていない図面の見積＋その他の項目の合計）
+function renderPlanEstimateTotal() {
+  const el = document.getElementById('planEstimateTotal');
+  const gs = getGreen(currentId);
+  if (!el) return;
+  if (!gs) { el.innerHTML = ''; return; }
+  let fell = 0, prune = 0;
+  (gs.treeMarkers || []).forEach(t => (t.works || []).forEach(w => {
+    if (w.consumedBy || w.done) return;
+    if (w.type === '伐採') fell += Number(w.amount || 0);
+    else if (w.type === '剪定') prune += Number(w.amount || 0);
+  }));
+  const mow = (gs.mowAreas || []).filter(a => !a.consumedBy).reduce((s, a) => s + Number(a.amount || 0), 0);
+  const repair = (gs.repairSpots || []).filter(x => !x.consumedBy).reduce((s, x) => s + Number(x.amount || 0), 0);
+  const other = (typeof currentItems !== 'undefined' ? currentItems : []).reduce((s, i) => s + Number(i.cost || 0), 0);
+  const total = fell + prune + mow + repair + other;
+  const parts = [];
+  if (fell) parts.push(`🪓伐採 ¥${fell.toLocaleString()}`);
+  if (prune) parts.push(`✂️剪定 ¥${prune.toLocaleString()}`);
+  if (mow) parts.push(`🌿草刈り ¥${mow.toLocaleString()}`);
+  if (repair) parts.push(`🔧修繕 ¥${repair.toLocaleString()}`);
+  if (other) parts.push(`🧾その他 ¥${other.toLocaleString()}`);
+  el.innerHTML = `
+    <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:10px 12px; margin-top:10px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <b>💰 今回の総見積額（未発注分）</b>
+        <span style="margin-left:auto; font-size:18px; font-weight:bold; color:#1b5e20;">¥${total.toLocaleString()}</span>
+      </div>
+      ${parts.length ? `<div style="font-size:12px; color:#555; margin-top:4px;">内訳: ${parts.join(' ／ ')}</div>` : '<div style="font-size:12px; color:#999; margin-top:4px;">まだ見積のある作業がありません</div>'}
+      <small class="help" style="margin-top:4px;">この金額が一番下の「💾 この発注を保存」で1件の発注になります。</small>
+    </div>`;
 }
 
 let addMode = false;            // create new green space via map click
@@ -2127,7 +2248,7 @@ function renderTreeMarkerList(gs) {
       ${t.photo ? `<img class="photo-thumb" src="${t.photo}" data-tree-photo-view="${t.id}">` : ''}
       <div class="tree-works-list">
         ${sortWorksForDisplay(t.works).map(w => `
-          <div class="work-row${w.done ? ' done' : ''}">
+          <div class="work-row${w.done ? ' done' : ''} ${w.type === '伐採' ? 'wr-fell' : 'wr-prune'}">
             ${w.seqLabel ? `<span class="seq-badge ${w.seqClass}">${w.seqLabel}</span>` : ''}
             ${w.date && fiscalYearOfDate(w.date) !== Number(gs.selectedYear) ? `<span class="work-year-badge">${fiscalYearOfDate(w.date)}年度</span>` : ''}
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
@@ -2146,9 +2267,10 @@ function renderTreeMarkerList(gs) {
               <option value="auto" ${w.priceMode === 'manual' ? '' : 'selected'}>単価契約</option>
               <option value="manual" ${w.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
             </select>
-            <span class="amount-label">見積額（円）</span>
-            <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="円" style="width:95px;">
-            ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}">${escapeHtml(pl)}</span>`)(workUnitPriceLabel(gs, t, w))}
+            <span class="amount-label">見積額</span>
+            <input type="number" data-work-amount="${t.id}|${w.id}" value="${w.amount != null ? w.amount : ''}" placeholder="例: 9603" style="width:95px;">
+            <span class="amount-label">円</span>
+            ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}" data-work-calc="${t.id}|${w.id}" title="タップで単価計算の内訳を表示" style="cursor:pointer;">🧮 ${escapeHtml(pl)}</span>`)(workUnitPriceLabel(gs, t, w))}
             <select data-work-budget="${t.id}|${w.id}">
               ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(w.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
             </select>
@@ -2162,6 +2284,15 @@ function renderTreeMarkerList(gs) {
     </div>
   `).join('');
 
+  // 🧮単価タグのタップで、その作業の単価計算の内訳を表示
+  wrap.querySelectorAll('[data-work-calc]').forEach(tag => {
+    tag.addEventListener('click', () => {
+      const [treeId, workId] = tag.dataset.workCalc.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (t && w) alert(workCalcText(gs, t, w));
+    });
+  });
   wrap.querySelectorAll('button[data-rename-tree]').forEach(btn => {
     btn.addEventListener('click', () => {
       const t = gs.treeMarkers.find(x => x.id === btn.dataset.renameTree);
@@ -2305,6 +2436,7 @@ function renderTreeMarkerList(gs) {
       if (w) { w.note = inp.value; save(); }
     });
   });
+  renderPlanEstimateTotal();
   wrap.querySelectorAll('input[data-work-done]').forEach(cb => {
     cb.addEventListener('change', () => {
       const [treeId, workId] = cb.dataset.workDone.split('|');
@@ -3431,6 +3563,7 @@ function renderItemListWrap() {
   if (typeof updateRecEnvTaxInfo === 'function') updateRecEnvTaxInfo();
   if (currentItems.length === 0) {
     wrap.innerHTML = '<div class="empty-msg">作業項目がまだありません</div>';
+    renderPlanEstimateTotal();
     return;
   }
   let html = '<table><tr><th>種別</th><th>数量</th><th>費用</th><th>予算</th><th>環境譲与税</th><th></th></tr>';
@@ -3443,6 +3576,7 @@ function renderItemListWrap() {
   const total = currentItems.reduce((s, i) => s + Number(i.cost || 0), 0);
   html += `</table><div class="item-total">項目合計: ¥${total.toLocaleString()}</div>`;
   wrap.innerHTML = html;
+  renderPlanEstimateTotal();
   wrap.querySelectorAll('button[data-rm-item]').forEach(btn => {
     btn.addEventListener('click', () => {
       currentItems.splice(Number(btn.dataset.rmItem), 1);
@@ -4547,6 +4681,29 @@ function jumpToTreeCard(treeId) {
   setTimeout(() => card.classList.remove('flash'), 2000);
 }
 
+// 図面のマークを長押し（600ミリ秒）すると、そのまま位置の置き直しモードにする。
+// 長押し後のタップ（クリック）は詳細ジャンプと誤認しないよう抑止する。
+function addLongPressMove(el, onLongPress) {
+  let timer = null, startX = 0, startY = 0, fired = false;
+  el.addEventListener('pointerdown', (e) => {
+    fired = false;
+    startX = e.clientX; startY = e.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(() => { fired = true; onLongPress(); }, 600);
+  });
+  const cancel = () => clearTimeout(timer);
+  el.addEventListener('pointermove', (e) => {
+    if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) cancel();
+  });
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('click', (e) => {
+    if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; }
+  });
+}
+
 function renderPdfPins(gs) {
   const layer = document.getElementById('pdfPinLayer');
   const banner = document.getElementById('roundFilterBanner');
@@ -4664,7 +4821,16 @@ function renderPdfPins(gs) {
       icon.style.left = t.x + '%';
       icon.style.top = t.y + '%';
       icon.textContent = treeMarkerIconEmoji(t);
-      icon.title = `${t.label}（${treeWorksSummary(t)}）クリックで下の詳細へ`;
+      icon.title = `${t.label}（${treeWorksSummary(t)}）クリックで下の詳細へ・長押しで位置修正`;
+      // 長押し→この木の位置修正モード（先に登録してタップジャンプより優先させる）
+      addLongPressMove(icon, () => {
+        treeMoveTargetId = t.id;
+        spotMoveTarget = null;
+        pinAddMode = false; pdfTreeAddMode = null; repairAddMode = false;
+        mowDrawMode = false; mowDraftPoints = [];
+        resetPdfModeButtons();
+        renderTreeMoveBanner(gs);
+      });
       icon.addEventListener('click', (e) => {
         // 配置・描画モード中は図面クリックの邪魔をしない
         if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
@@ -4690,7 +4856,16 @@ function renderPdfPins(gs) {
     icon.style.left = s.x + '%';
     icon.style.top = s.y + '%';
     icon.textContent = '🔧';
-    icon.title = `${s.label}${s.amount != null ? `（¥${Number(s.amount).toLocaleString()}）` : ''}${s.consumedBy ? '（記録済）' : ''}クリックで下の詳細へ`;
+    icon.title = `${s.label}${s.amount != null ? `（¥${Number(s.amount).toLocaleString()}）` : ''}${s.consumedBy ? '（記録済）' : ''}クリックで下の詳細へ・長押しで位置修正`;
+    // 長押し→この修繕箇所の位置修正モード
+    addLongPressMove(icon, () => {
+      spotMoveTarget = { kind: 'repair', id: s.id };
+      treeMoveTargetId = null;
+      pinAddMode = false; pdfTreeAddMode = null; repairAddMode = false;
+      mowDrawMode = false; mowDraftPoints = [];
+      resetPdfModeButtons();
+      renderTreeMoveBanner(gs);
+    });
     icon.addEventListener('click', (e) => {
       if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
       e.stopPropagation();
@@ -4706,6 +4881,7 @@ function renderPdfPins(gs) {
   renderPinList(gs);
   renderMowAreaList(gs);
   renderRepairList(gs);
+  renderPlanEstimateTotal();
 }
 
 function renderMowAreaList(gs) {
@@ -4728,9 +4904,10 @@ function renderMowAreaList(gs) {
         <option value="auto" ${a.priceMode === 'manual' ? '' : 'selected'}>単価契約</option>
         <option value="manual" ${a.priceMode === 'manual' ? 'selected' : ''}>契約外</option>
       </select>
-      <span class="amount-label">見積額（円）</span>
-      <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="円" style="width:90px; font-size:12px; padding:2px 4px;">
-      ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}">${escapeHtml(pl)}</span>`)(mowUnitPriceLabel(gs, a))}
+      <span class="amount-label">見積額</span>
+      <input type="number" data-mow-amount="${a.id}" value="${a.amount != null ? a.amount : ''}" placeholder="例: 40920" style="width:90px; font-size:12px; padding:2px 4px;">
+      <span class="amount-label">円</span>
+      ${(pl => `<span class="unit-price-tag${pl.indexOf('単価 ¥') === 0 ? '' : ' na'}" data-mow-calc="${a.id}" title="タップで単価計算の内訳を表示" style="cursor:pointer;">🧮 ${escapeHtml(pl)}</span>`)(mowUnitPriceLabel(gs, a))}
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
@@ -4790,6 +4967,13 @@ function renderMowAreaList(gs) {
   });
   wrap.querySelectorAll('button[data-mow-move]').forEach(btn => {
     btn.addEventListener('click', () => armSpotMove(gs, 'mow', btn.dataset.mowMove));
+  });
+  // 🧮単価タグのタップで、そのエリアの単価計算の内訳を表示
+  wrap.querySelectorAll('[data-mow-calc]').forEach(tag => {
+    tag.addEventListener('click', () => {
+      const a = gs.mowAreas.find(x => x.id === tag.dataset.mowCalc);
+      if (a) alert(mowCalcText(gs, a));
+    });
   });
   wrap.querySelectorAll('button[data-mow-rename]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4860,8 +5044,9 @@ function renderRepairList(gs) {
       <span>🔧 ${escapeHtml(s.label)}</span>
       <button class="outline" data-repair-rename="${s.id}" title="名称を変更" style="min-height:0; padding:2px 6px; font-size:12px;">✏️</button>
       <button class="outline" data-repair-move="${s.id}" title="図面をタップして位置を置き直す" style="min-height:0; padding:2px 6px; font-size:12px;">📍</button>
-      <span class="amount-label">見積額（円）</span>
-      <input type="number" data-repair-amount="${s.id}" value="${s.amount != null ? s.amount : ''}" placeholder="円" style="width:90px; font-size:12px; padding:2px 4px;">
+      <span class="amount-label">見積額</span>
+      <input type="number" data-repair-amount="${s.id}" value="${s.amount != null ? s.amount : ''}" placeholder="例: 50000" style="width:90px; font-size:12px; padding:2px 4px;">
+      <span class="amount-label">円</span>
       <select data-repair-budget="${s.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
