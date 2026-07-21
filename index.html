@@ -236,12 +236,19 @@
     line-height: 1;
     cursor: pointer;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
-    /* 長押しでの位置修正をスマホで確実に効かせる:
-       アイコン上ではスクロールを始めさせず、iOSの長押しメニューも抑止する */
+    /* つかんで移動をスマホで確実に効かせる:
+       アイコン上ではスクロールを始めさせず、長押しメニューも抑止する */
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+    z-index: 5;
+  }
+  /* つかんでいる最中のアイコン: 少し大きく・最前面にして分かりやすく */
+  .pdf-tree-icon.dragging {
+    transform: translate(-50%, -50%) scale(1.5);
+    z-index: 30;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7));
   }
   .pdf-tree-amount-label {
     position: absolute;
@@ -967,7 +974,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16l</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16m</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -987,7 +994,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20c</p>
   </div>
 </div>
 
@@ -1090,7 +1097,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16l</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16m</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1152,7 +1159,7 @@
         <span class="lg mow">🌿（草刈りエリア）</span>
         <span class="lg repair">🔧（修繕箇所）</span>
         <span class="lg">✅（対応済みの木）</span>
-        <br><small class="help" style="margin:0;">🪓✂️🔧のマークは<b>長押し</b>すると、そのまま位置の置き直しモードになります（タップは詳細へジャンプ）。</small>
+        <br><small class="help" style="margin:0;">🪓✂️🔧のマークは<b>指でつかんでそのまま動かせます</b>（軽く押して少しずらすと移動、そのままタップは詳細へジャンプ）。</small>
       </div>
       <div id="mowAreaList" style="margin-top:8px;"></div>
       <div id="repairList" style="margin-top:8px;"></div>
@@ -4585,6 +4592,8 @@ document.getElementById('pdfCanvasHolder').addEventListener('wheel', (e) => {
   let dragging = false, dragMoved = false, sx = 0, sy = 0, sl = 0, st = 0;
   holder.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
+    // アイコン（木・修繕）の上で押した時は、図面のパンではなくアイコンのドラッグ移動を優先する
+    if (e.target.closest('.pdf-tree-icon')) return;
     dragging = true; dragMoved = false;
     sx = e.clientX; sy = e.clientY;
     sl = holder.scrollLeft; st = holder.scrollTop;
@@ -4732,26 +4741,62 @@ function jumpToTreeCard(treeId) {
   setTimeout(() => card.classList.remove('flash'), 2000);
 }
 
-// 図面のマークを長押し（600ミリ秒）すると、そのまま位置の置き直しモードにする。
-// 長押し後のタップ（クリック）は詳細ジャンプと誤認しないよう抑止する。
-function addLongPressMove(el, onLongPress) {
-  let timer = null, startX = 0, startY = 0, fired = false;
+// 図面のマーク（木・修繕）を、指やマウスでつかんでそのまま動かせるようにする。
+// Androidの長押しはブラウザがスクロール判定で横取りして効きにくいため、
+// 「押して少し動かしたら＝つかんで移動、動かさず離したら＝タップ（詳細へ）」という
+// 動きベースの判定にする。タップと移動が確実に見分けられる。
+function makeIconDraggable(el, opts) {
+  // opts: { setXY(x,y), onTap(), onDragEnd() }
+  let downX = 0, downY = 0, dragging = false, pid = null, justDragged = false;
   el.addEventListener('pointerdown', (e) => {
-    fired = false;
-    startX = e.clientX; startY = e.clientY;
-    clearTimeout(timer);
-    timer = setTimeout(() => { fired = true; onLongPress(); }, 600);
+    if (e.button != null && e.button > 0) return;
+    // 配置・描画・別の位置修正モード中は、つかむ動作より従来の配置動作を優先
+    if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
+    pid = e.pointerId;
+    downX = e.clientX; downY = e.clientY;
+    dragging = false;
+    try { el.setPointerCapture(pid); } catch (_) {}
+    e.stopPropagation();
   });
-  const cancel = () => clearTimeout(timer);
   el.addEventListener('pointermove', (e) => {
-    // 指の太さぶんの揺れではキャンセルしない（スマホで長押しが効かなくなるため閾値は広め）
-    if (Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) cancel();
+    if (pid !== e.pointerId) return;
+    if (!dragging) {
+      if (Math.abs(e.clientX - downX) < 6 && Math.abs(e.clientY - downY) < 6) return;
+      dragging = true;
+      el.classList.add('dragging');
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} } // つかんだ合図に軽く振動
+    }
+    e.preventDefault();
+    const canvas = document.getElementById('pdfCanvas');
+    const rect = canvas.getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * 100;
+    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(0, Math.min(100, x));
+    y = Math.max(0, Math.min(100, y));
+    el.style.left = x + '%';
+    el.style.top = y + '%';
+    el.__dragXY = { x, y };
   });
-  el.addEventListener('pointerup', cancel);
-  el.addEventListener('pointercancel', cancel);
+  const finish = (e) => {
+    if (pid !== e.pointerId) return;
+    try { el.releasePointerCapture(pid); } catch (_) {}
+    pid = null;
+    if (dragging) {
+      dragging = false;
+      justDragged = true;
+      el.classList.remove('dragging');
+      const xy = el.__dragXY;
+      if (xy) { opts.setXY(xy.x, xy.y); save(); if (opts.onDragEnd) opts.onDragEnd(); }
+    }
+  };
+  el.addEventListener('pointerup', finish);
+  el.addEventListener('pointercancel', finish);
   el.addEventListener('contextmenu', (e) => e.preventDefault());
   el.addEventListener('click', (e) => {
-    if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; }
+    if (justDragged) { justDragged = false; e.stopImmediatePropagation(); e.preventDefault(); return; }
+    if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
+    e.stopPropagation();
+    if (opts.onTap) opts.onTap();
   });
 }
 
@@ -4872,25 +4917,22 @@ function renderPdfPins(gs) {
       icon.style.left = t.x + '%';
       icon.style.top = t.y + '%';
       icon.textContent = treeMarkerIconEmoji(t);
-      icon.title = `${t.label}（${treeWorksSummary(t)}）クリックで下の詳細へ・長押しで位置修正`;
-      // 長押し→この木の位置修正モード（先に登録してタップジャンプより優先させる）
-      addLongPressMove(icon, () => {
-        treeMoveTargetId = t.id;
-        spotMoveTarget = null;
-        pinAddMode = false; pdfTreeAddMode = null; repairAddMode = false;
-        mowDrawMode = false; mowDraftPoints = [];
-        resetPdfModeButtons();
-        renderTreeMoveBanner(gs);
-      });
-      icon.addEventListener('click', (e) => {
-        // 配置・描画モード中は図面クリックの邪魔をしない
-        if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
-        e.stopPropagation();
-        jumpToTreeCard(t.id);
+      icon.title = `${t.label}（${treeWorksSummary(t)}）タップで下の詳細へ・つかんで移動`;
+      // つかんで移動 or タップで詳細へ
+      makeIconDraggable(icon, {
+        setXY: (x, y) => { t.x = x; t.y = y; },
+        onDragEnd: () => { renderPdfPins(gs); },
+        onTap: () => jumpToTreeCard(t.id),
       });
       layer.appendChild(icon);
 
-      // 金額は図面上には出さない（各一覧の見積額欄と「今回の総見積額」で確認する）
+      // 作業名のラベル（金額は出さない。各一覧の見積額欄と「今回の総見積額」で確認する）
+      const nameLabel = document.createElement('div');
+      nameLabel.className = 'pdf-tree-amount-label';
+      nameLabel.style.left = t.x + '%';
+      nameLabel.style.top = t.y + '%';
+      nameLabel.textContent = t.label;
+      layer.appendChild(nameLabel);
     });
   // 修繕箇所（🔧）: タップで下の修繕リストの該当行へ
   (gs.repairSpots || []).filter(s => !allowedRepairIds || allowedRepairIds.has(s.id)).forEach(s => {
@@ -4899,27 +4941,30 @@ function renderPdfPins(gs) {
     icon.style.left = s.x + '%';
     icon.style.top = s.y + '%';
     icon.textContent = '🔧';
-    icon.title = `${s.label}${s.amount != null ? `（¥${Number(s.amount).toLocaleString()}）` : ''}${s.consumedBy ? '（記録済）' : ''}クリックで下の詳細へ・長押しで位置修正`;
-    // 長押し→この修繕箇所の位置修正モード
-    addLongPressMove(icon, () => {
-      spotMoveTarget = { kind: 'repair', id: s.id };
-      treeMoveTargetId = null;
-      pinAddMode = false; pdfTreeAddMode = null; repairAddMode = false;
-      mowDrawMode = false; mowDraftPoints = [];
-      resetPdfModeButtons();
-      renderTreeMoveBanner(gs);
-    });
-    icon.addEventListener('click', (e) => {
-      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
-      e.stopPropagation();
-      const row = document.querySelector(`[data-repair-row="${s.id}"]`);
-      if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        row.classList.add('flash');
-        setTimeout(() => row.classList.remove('flash'), 2000);
-      }
+    icon.title = `${s.label}${s.consumedBy ? '（記録済）' : ''}タップで下の詳細へ・つかんで移動`;
+    // つかんで移動 or タップで修繕リストの該当行へ
+    makeIconDraggable(icon, {
+      setXY: (x, y) => { s.x = x; s.y = y; },
+      onDragEnd: () => { renderPdfPins(gs); },
+      onTap: () => {
+        const row = document.querySelector(`[data-repair-row="${s.id}"]`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.classList.add('flash');
+          setTimeout(() => row.classList.remove('flash'), 2000);
+        }
+      },
     });
     layer.appendChild(icon);
+
+    // 修繕箇所の名前ラベル
+    const rLabel = document.createElement('div');
+    rLabel.className = 'pdf-tree-amount-label';
+    rLabel.style.left = s.x + '%';
+    rLabel.style.top = s.y + '%';
+    rLabel.style.background = 'rgba(239,108,0,0.9)';
+    rLabel.textContent = s.label;
+    layer.appendChild(rLabel);
   });
   renderPinList(gs);
   renderMowAreaList(gs);
