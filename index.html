@@ -226,9 +226,12 @@
     transform: translate(-50%, -100%) rotate(-45deg);
     box-shadow: 0 1px 3px rgba(0,0,0,0.5);
     cursor: pointer;
+    touch-action: none; /* つかんで移動をスマホで確実に効かせる */
+    -webkit-touch-callout: none;
   }
   .pdf-pin.tree { background: #2e7d32; }
   .pdf-pin.prune { background: #1565c0; }
+  .pdf-pin.dragging { box-shadow: 0 2px 6px rgba(0,0,0,0.7); z-index: 30; }
   .pdf-tree-icon {
     position: absolute;
     transform: translate(-50%, -50%);
@@ -772,6 +775,10 @@
   .work-row input[type="text"] { flex: 1; min-width: 80px; padding: 2px 4px; font-size: 11px; }
   .work-row input[type="checkbox"] { width: auto; }
   .work-done-check { display: flex; align-items: center; gap: 2px; margin: 0; white-space: nowrap; }
+  /* 「今回発注に含める」チェック。外すと『作業予定なし』としてグレー表示 */
+  .select-check { color: #1b5e20; font-weight: bold; }
+  .select-check.off { color: #9e9e9e; font-weight: normal; }
+  .work-row.not-planned { opacity: 0.5; }
   .work-type-badge {
     font-weight: bold;
     white-space: nowrap;
@@ -974,7 +981,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16m</span></div>
+  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16n</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -994,7 +1001,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20c</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20d</p>
   </div>
 </div>
 
@@ -1097,7 +1104,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16m</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16n</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1258,7 +1265,7 @@
       </div>
       <div class="field"><label>入力者</label><select id="recInputBy"></select></div>
     </div>
-    <div class="field"><label>受注業者</label><select id="recContractor"></select></div>
+    <div class="field" id="recContractorField"><label>受注業者</label><select id="recContractor"></select></div>
     <div class="field">
       <label>写真（3枚まで）</label>
       <input type="file" id="recPhoto" accept="image/*" multiple>
@@ -1345,8 +1352,15 @@ const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
 const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
 const UNITPRICE_KEY = 'niiza_unit_prices_v1';
 const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
-const DEFAULT_STATUSES = ['見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了', '施工書類受け取り済み', '請求書処理済み'];
+const DEFAULT_STATUSES = ['調査中', '見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了', '施工書類受け取り済み', '請求書処理済み'];
+const INVESTIGATING_STATUS = '調査中'; // この状態のときは受注業者欄を出さない（まだ業者未定のため）
 const FINAL_STATUS = '請求書処理済み'; // 完了の定義＝請求書処理まで完了したこと
+// 既存データ（クラウドに保存済みのstatuses）に「調査中」が無ければ先頭に足す
+function ensureInvestigatingStatus() {
+  if (Array.isArray(statuses) && !statuses.includes(INVESTIGATING_STATUS)) {
+    statuses.unshift(INVESTIGATING_STATUS);
+  }
+}
 const DEFAULT_BUDCATS = ['通常予算'];
 const NIIZA_CENTER = [35.7768, 139.5589];
 
@@ -1554,13 +1568,14 @@ function renderPlanEstimateTotal() {
   if (!el) return;
   if (!gs) { el.innerHTML = ''; return; }
   let fell = 0, prune = 0;
+  // 「今回発注に含める」ものだけ集計（作業予定なし＝selected===false は除く）
   (gs.treeMarkers || []).forEach(t => (t.works || []).forEach(w => {
-    if (w.consumedBy || w.done) return;
+    if (w.consumedBy || w.done || w.selected === false) return;
     if (w.type === '伐採') fell += Number(w.amount || 0);
     else if (w.type === '剪定') prune += Number(w.amount || 0);
   }));
-  const mow = (gs.mowAreas || []).filter(a => !a.consumedBy).reduce((s, a) => s + Number(a.amount || 0), 0);
-  const repair = (gs.repairSpots || []).filter(x => !x.consumedBy).reduce((s, x) => s + Number(x.amount || 0), 0);
+  const mow = (gs.mowAreas || []).filter(a => !a.consumedBy && a.selected !== false).reduce((s, a) => s + Number(a.amount || 0), 0);
+  const repair = (gs.repairSpots || []).filter(x => !x.consumedBy && x.selected !== false).reduce((s, x) => s + Number(x.amount || 0), 0);
   const other = (typeof currentItems !== 'undefined' ? currentItems : []).reduce((s, i) => s + Number(i.cost || 0), 0);
   const total = fell + prune + mow + repair + other;
   const parts = [];
@@ -2273,7 +2288,7 @@ function renderTreeMarkerList(gs) {
       ${t.photo ? `<img class="photo-thumb" src="${t.photo}" data-tree-photo-view="${t.id}">` : ''}
       <div class="tree-works-list">
         ${sortWorksForDisplay(t.works).map(w => `
-          <div class="work-row${w.done ? ' done' : ''} ${w.type === '伐採' ? 'wr-fell' : 'wr-prune'}">
+          <div class="work-row${w.done ? ' done' : ''} ${w.type === '伐採' ? 'wr-fell' : 'wr-prune'}${(!w.consumedBy && !w.done && w.selected === false) ? ' not-planned' : ''}">
             ${w.seqLabel ? `<span class="seq-badge ${w.seqClass}">${w.seqLabel}</span>` : ''}
             ${w.date && fiscalYearOfDate(w.date) !== Number(gs.selectedYear) ? `<span class="work-year-badge">${fiscalYearOfDate(w.date)}年度</span>` : ''}
             <span class="work-type-badge">${w.type === '剪定' ? '✂️' : '🪓'}${escapeHtml(w.type)}</span>
@@ -2299,6 +2314,7 @@ function renderTreeMarkerList(gs) {
             <select data-work-budget="${t.id}|${w.id}">
               ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(w.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
             </select>
+            ${!w.consumedBy && !w.done ? `<label class="work-done-check select-check${w.selected === false ? ' off' : ''}" title="今回の発注に含めるか。外すと『作業予定なし』として今回の発注に入りません"><input type="checkbox" data-work-select="${t.id}|${w.id}" ${w.selected !== false ? 'checked' : ''}>今回発注</label>` : ''}
             <label class="work-done-check"><input type="checkbox" data-work-done="${t.id}|${w.id}" ${w.done ? 'checked' : ''}>対応済み</label>
             <input type="text" data-work-note="${t.id}|${w.id}" value="${escapeHtml(w.note || '')}" placeholder="メモ（状況など）">
             ${w.consumedBy ? '<span class="env-tax-badge">記録済み</span>' : ''}
@@ -2462,6 +2478,21 @@ function renderTreeMarkerList(gs) {
     });
   });
   renderPlanEstimateTotal();
+  // 今回発注に含める/含めない（作業予定なし）の切り替え
+  wrap.querySelectorAll('input[data-work-select]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const [treeId, workId] = cb.dataset.workSelect.split('|');
+      const t = gs.treeMarkers.find(x => x.id === treeId);
+      const w = t && t.works.find(x => x.id === workId);
+      if (w) {
+        w.selected = cb.checked;
+        save();
+        renderTreeMarkerList(gs);
+        renderPdfPins(gs);
+        renderBudgetCard(gs);
+      }
+    });
+  });
   wrap.querySelectorAll('input[data-work-done]').forEach(cb => {
     cb.addEventListener('change', () => {
       const [treeId, workId] = cb.dataset.workDone.split('|');
@@ -2674,7 +2705,7 @@ function collectPickableWorks(gs, type) {
     normalizeTreeMarker(t);
     (t.works || []).forEach(w => {
       if (w.type === type && !w.consumedBy) {
-        out.push({ treeId: t.id, treeLabel: t.label, workId: w.id, date: w.date, done: w.done, amount: w.amount, budgetCategory: w.budgetCategory, subType: w.subType });
+        out.push({ treeId: t.id, treeLabel: t.label, workId: w.id, date: w.date, done: w.done, amount: w.amount, budgetCategory: w.budgetCategory, subType: w.subType, selected: w.selected !== false });
       }
     });
   });
@@ -2836,11 +2867,21 @@ document.getElementById('btnAddStatus').addEventListener('click', () => {
   saveStatuses(); input.value = ''; renderStatusTags(); renderRecStatusSelect();
 });
 function renderRecStatusSelect() {
+  ensureInvestigatingStatus();
   const sel = document.getElementById('recStatus');
   const prev = sel.value;
   sel.innerHTML = statuses.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
   if (statuses.includes(prev)) sel.value = prev;
+  toggleContractorField();
 }
+// 「調査中」のときは受注業者欄を隠す（まだ業者が決まっていないため）
+function toggleContractorField() {
+  const sel = document.getElementById('recStatus');
+  const field = document.getElementById('recContractorField');
+  if (!sel || !field) return;
+  field.style.display = (sel.value === INVESTIGATING_STATUS) ? 'none' : '';
+}
+document.getElementById('recStatus').addEventListener('change', toggleContractorField);
 
 // ---- Budget categories (e.g. 通常予算 / 環境譲与税予算 etc.) ----
 // 予算名の変更: 名前は作業項目・木の作業・草刈りエリア・年度別予算額のキーとして
@@ -3320,7 +3361,7 @@ function collectPlannedTreeWorks(gs, cat, year) {
   (gs.treeMarkers || []).forEach(t => {
     normalizeTreeMarker(t);
     (t.works || []).forEach(w => {
-      if (w.consumedBy || w.amount == null) return;
+      if (w.consumedBy || w.amount == null || w.selected === false) return;
       if ((w.budgetCategory || budgetCategories[0]) !== cat) return;
       if (w.date && fiscalYearOfDate(w.date) !== Number(year)) return;
       out.push({ tree: t, work: w });
@@ -3342,13 +3383,13 @@ function ensureMowShape(gs) {
 function collectPlannedMowAreas(gs, cat) {
   ensureMowShape(gs);
   return gs.mowAreas.filter(a =>
-    !a.consumedBy && a.amount != null && (a.budgetCategory || budgetCategories[0]) === cat);
+    !a.consumedBy && a.selected !== false && a.amount != null && (a.budgetCategory || budgetCategories[0]) === cat);
 }
 // 未記録の修繕箇所の見積額も予算の「見込み」に含める
 function collectPlannedRepairSpots(gs, cat) {
   ensureRepairShape(gs);
   return gs.repairSpots.filter(s =>
-    !s.consumedBy && s.amount != null && (s.budgetCategory || budgetCategories[0]) === cat);
+    !s.consumedBy && s.selected !== false && s.amount != null && (s.budgetCategory || budgetCategories[0]) === cat);
 }
 function releaseMowAreas(gs, recordId) {
   ensureMowShape(gs);
@@ -3765,7 +3806,8 @@ document.getElementById('btnAddRecord').addEventListener('click', () => {
   const date = document.getElementById('recDate').value;
   const status = document.getElementById('recStatus').value;
   const inputBy = document.getElementById('recInputBy').value;
-  const contractor = document.getElementById('recContractor').value;
+  // 調査中のときは受注業者は付けない（まだ業者未定）
+  const contractor = status === INVESTIGATING_STATUS ? '' : document.getElementById('recContractor').value;
   // 新規に選んだ写真（photoIdなし）はここで登録し、既存分と合わせてID配列にする
   const photoIds = currentRecordPhotos.map(p => p.photoId || registerPhoto(gs, p.dataUrl));
   const photos = currentRecordPhotos.map(p => p.dataUrl);
@@ -4043,7 +4085,8 @@ function renderRoundTable(gs) {
 function collectMapItems(gs) {
   const items = [];
   ['伐採', '剪定'].forEach(type => {
-    const cands = collectPickableWorks(gs, type).filter(c => !c.done);
+    // done（対応済み）と、今回発注に含めない（作業予定なし）ものは除く
+    const cands = collectPickableWorks(gs, type).filter(c => !c.done && c.selected !== false);
     if (!cands.length) return;
     // 予算ごと（剪定は強/弱ごとにも）にまとめて1項目にする
     const groups = {};
@@ -4064,7 +4107,7 @@ function collectMapItems(gs) {
       });
     });
   });
-  const areas = collectAllPickableMowAreas(gs);
+  const areas = collectAllPickableMowAreas(gs).filter(a => a.selected !== false);
   if (areas.length) {
     const byCat = {};
     areas.forEach(a => {
@@ -4085,7 +4128,7 @@ function collectMapItems(gs) {
   }
   // 図面に置いた未対応の修繕箇所も発注項目にする（予算ごとにまとめる）
   ensureRepairShape(gs);
-  const repairs = gs.repairSpots.filter(s => !s.consumedBy);
+  const repairs = gs.repairSpots.filter(s => !s.consumedBy && s.selected !== false);
   if (repairs.length) {
     const byCat = {};
     repairs.forEach(s => {
@@ -4395,7 +4438,6 @@ function renderRecordTable(gs) {
         <td>${(r.photos && r.photos.length) ? r.photos.map(p => `<img class="photo-thumb" src="${p}" data-id="${r.id}">`).join('') : '-'}</td>
         <td>
           <button class="outline" data-edit="${r.id}">編集</button>
-          <button class="danger" data-del="${r.id}">削除</button>
         </td>
       </tr>`;
     });
@@ -4418,18 +4460,7 @@ function renderRecordTable(gs) {
   wrap.querySelectorAll('button[data-edit]').forEach(btn => {
     btn.addEventListener('click', () => editRecord(gs, btn.dataset.edit));
   });
-  wrap.querySelectorAll('button[data-del]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!confirm('この記録を削除しますか？')) return;
-      if (selectedRoundId === btn.dataset.del) selectedRoundId = null;
-      releaseTreeMarkers(gs, btn.dataset.del);
-      releaseMowAreas(gs, btn.dataset.del);
-      gs.records = gs.records.filter(r => r.id !== btn.dataset.del);
-      save();
-      renderBudgetCard(gs); renderRecordTable(gs); renderGreenList(); renderEnvTaxBox();
-      renderTreeMarkerList(gs); renderTreeMarkers(); renderPdfPins(gs);
-    });
-  });
+  // 作業履歴は記録として残すため削除できない（誤操作・改ざん防止）。修正は「編集」から。
 }
 
 document.getElementById('showAllYears').addEventListener('change', () => {
@@ -4592,8 +4623,8 @@ document.getElementById('pdfCanvasHolder').addEventListener('wheel', (e) => {
   let dragging = false, dragMoved = false, sx = 0, sy = 0, sl = 0, st = 0;
   holder.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    // アイコン（木・修繕）の上で押した時は、図面のパンではなくアイコンのドラッグ移動を優先する
-    if (e.target.closest('.pdf-tree-icon')) return;
+    // アイコン（木・修繕・ピン）の上で押した時は、図面のパンではなくアイコンのドラッグ移動を優先する
+    if (e.target.closest('.pdf-tree-icon') || e.target.closest('.pdf-pin')) return;
     dragging = true; dragMoved = false;
     sx = e.clientX; sy = e.clientY;
     sl = holder.scrollLeft; st = holder.scrollTop;
@@ -4881,9 +4912,7 @@ function renderPdfPins(gs) {
 
   (gs.pdfPins || []).forEach(p => {
     // ピン・ラベルのどちらをタップしても、下のメモピン一覧の該当行へ飛ぶ
-    const jumpToPinRow = (e) => {
-      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
-      e.stopPropagation();
+    const jumpToPinRow = () => {
       const row = document.querySelector(`[data-pin-row="${p.id}"]`);
       if (row) {
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4895,8 +4924,13 @@ function renderPdfPins(gs) {
     pin.className = 'pdf-pin' + (p.label.includes('伐採') ? ' tree' : (p.label.includes('剪定') ? ' prune' : ''));
     pin.style.left = p.x + '%';
     pin.style.top = p.y + '%';
-    pin.title = `${p.label} クリックで下の詳細へ`;
-    pin.addEventListener('click', jumpToPinRow);
+    pin.title = `${p.label} タップで下の詳細へ・つかんで移動`;
+    // つかんで移動 or タップで一覧へ
+    makeIconDraggable(pin, {
+      setXY: (x, y) => { p.x = x; p.y = y; },
+      onDragEnd: () => { renderPdfPins(gs); },
+      onTap: jumpToPinRow,
+    });
     layer.appendChild(pin);
 
     const label = document.createElement('div');
@@ -4904,7 +4938,10 @@ function renderPdfPins(gs) {
     label.style.left = p.x + '%';
     label.style.top = p.y + '%';
     label.textContent = p.label;
-    label.addEventListener('click', jumpToPinRow);
+    label.addEventListener('click', () => {
+      if (pdfTreeAddMode || mowDrawMode || pinAddMode || repairAddMode || treeMoveTargetId || spotMoveTarget) return;
+      jumpToPinRow();
+    });
     layer.appendChild(label);
   });
   // Tree markers plotted directly on this site plan (x/y are % positions on the canvas)
@@ -4999,7 +5036,7 @@ function renderMowAreaList(gs) {
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
-      ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : ''}
+      ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${a.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-mow-select="${a.id}" ${a.selected !== false ? 'checked' : ''}>今回発注</label>`}
       <button class="outline" data-mow-photo-btn="${a.id}" title="このエリアの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-mow-photo="${a.id}" style="display:none;">
       ${a.photo ? `<img class="spot-photo-thumb" src="${a.photo}" data-mow-photo-view="${a.id}" title="タップで拡大">` : ''}
@@ -5108,6 +5145,12 @@ function renderMowAreaList(gs) {
       if (a) { a.budgetCategory = sel.value; save(); renderBudgetCard(gs); }
     });
   });
+  wrap.querySelectorAll('input[data-mow-select]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === cb.dataset.mowSelect);
+      if (a) { a.selected = cb.checked; save(); renderMowAreaList(gs); renderBudgetCard(gs); renderPlanEstimateTotal(); }
+    });
+  });
   wrap.querySelectorAll('button[data-mow-del]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!confirm('この草刈りエリアを削除しますか？')) return;
@@ -5138,7 +5181,7 @@ function renderRepairList(gs) {
       <select data-repair-budget="${s.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
-      ${s.consumedBy ? '<span class="env-tax-badge">記録済</span>' : ''}
+      ${s.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${s.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-repair-select="${s.id}" ${s.selected !== false ? 'checked' : ''}>今回発注</label>`}
       <button class="outline" data-repair-photo-btn="${s.id}" title="この箇所の状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-repair-photo="${s.id}" style="display:none;">
       ${s.photo ? `<img class="spot-photo-thumb" src="${s.photo}" data-repair-photo-view="${s.id}" title="タップで拡大">` : ''}
@@ -5199,6 +5242,12 @@ function renderRepairList(gs) {
     img.addEventListener('click', () => {
       document.getElementById('photoModalImg').src = img.src;
       document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
+  wrap.querySelectorAll('input[data-repair-select]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const s = gs.repairSpots.find(x => x.id === cb.dataset.repairSelect);
+      if (s) { s.selected = cb.checked; save(); renderRepairList(gs); renderBudgetCard(gs); renderPlanEstimateTotal(); }
     });
   });
   wrap.querySelectorAll('button[data-repair-del]').forEach(btn => {
