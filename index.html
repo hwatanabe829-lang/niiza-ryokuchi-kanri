@@ -981,7 +981,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">地図をクリックして緑地を新規登録できます <span style="opacity:0.6; font-size:10px;">版16n</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16o</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1001,13 +1001,22 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20d</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20e</p>
   </div>
 </div>
 
 <div class="layout">
   <div id="sidebar">
     <div id="mowAlertWrap"></div>
+    <div class="panel-section">
+      <h2>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと・全緑地共通）</h2>
+      <p style="font-size:12px; color:#777; margin:2px 0 8px;">予算額と使用状況はすべての緑地の合算です。どの緑地から見ても同じ数字になります。</p>
+      <div class="field" style="margin-bottom:8px;">
+        <label>表示する年度</label>
+        <select id="budgetViewYearSelect"></select>
+      </div>
+      <div id="budgetCardsWrap"></div>
+    </div>
     <div class="panel-section">
       <h2>🌲 環境譲与税 予算（全緑地合計）</h2>
       <div class="field">
@@ -1028,7 +1037,8 @@
     </div>
     <div class="panel-section">
       <h2>緑地一覧</h2>
-      <button class="add-btn" id="btnAddMode">➕ 地図クリックで緑地を追加</button>
+      <button class="add-btn" id="btnAddMode">➕ 新しい緑地を作成</button>
+      <small class="help" style="margin:0 0 6px;">作成後、地図上のピンをつかんで動かすと位置を調整できます。</small>
       <div id="greenList"></div>
     </div>
     <div class="panel-section">
@@ -1078,7 +1088,7 @@
       <button id="btnOpenUnitPrices" style="width:100%; margin-top:8px;">💴 単価表を開く・編集する</button>
       <small class="help" id="unitPriceStatus" style="margin-top:4px; display:block;"></small>
     </div>
-    <div class="panel-section">
+    <div class="panel-section" style="display:none;">
       <h2>💾 データのバックアップ</h2>
       <small class="help">データはクラウドに保存され全職員で共有されます。ここでのファイル保存は、誤操作からの復旧や年度末の控えのための保険です。</small>
       <div id="storageMeter" style="margin:8px 0;"></div>
@@ -1104,7 +1114,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16n</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16o</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1219,12 +1229,6 @@
 
   <hr style="margin:16px 0; border-color:#eee;">
 
-  <h3>💰 <span id="budgetYearLabel">-</span>年度の予算状況（予算ごと・全緑地共通）</h3>
-  <p style="font-size:12px; color:#777; margin:2px 0 8px;">予算額と使用状況はすべての緑地の合算です。どの緑地から見ても同じ数字になります。</p>
-  <div id="budgetCardsWrap"></div>
-
-  <hr style="margin:16px 0; border-color:#eee;">
-
   <h3>作業履歴</h3>
   <div class="checkbox-field">
     <input type="checkbox" id="showAllYears">
@@ -1232,21 +1236,14 @@
   </div>
   <div id="recordTableWrap"></div>
 
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <details id="basicInfoDetails">
-    <summary>⚙️ 基本情報の編集（緑地名・メモ・地図上の位置・削除）</summary>
-    <div class="field" style="margin-top:8px;">
-      <label>緑地名</label>
-      <input type="text" id="editName">
-    </div>
-    <div class="field">
-      <label>メモ・備考</label>
-      <textarea id="editMemo" rows="2"></textarea>
-    </div>
+  <!-- 基本情報の編集欄は不要のため非表示（緑地名は上の「✏️ 名前変更」、位置は地図ピンをつかんで移動） -->
+  <details id="basicInfoDetails" style="display:none;">
+    <summary>⚙️ 基本情報の編集</summary>
+    <input type="text" id="editName">
+    <textarea id="editMemo" rows="2"></textarea>
     <button id="btnSaveInfo">基本情報を保存</button>
-    <button class="outline" id="btnRepositionMap">🗺️ 地図上の位置を設定/変更</button>
-    <button class="danger" id="btnDeleteGreen">この緑地を削除</button>
+    <button class="outline" id="btnRepositionMap">位置を変更</button>
+    <button class="danger" id="btnDeleteGreen">削除</button>
   </details>
 
   <hr style="margin:16px 0; border-color:#eee;">
@@ -2160,11 +2157,27 @@ map.on('click', (e) => {
   openDetail(gs.id);
 });
 
+// 「➕ 新しい緑地を作成」: いま地図に映っている中心に新しい緑地をすぐ作る。
+// 位置はあとから地図上のピンをつかんで動かして調整できる（掴んで移動）。
 document.getElementById('btnAddMode').addEventListener('click', () => {
-  addMode = !addMode;
-  document.getElementById('btnAddMode').textContent = addMode
-    ? '🖱️ 地図上をクリックして配置...（再クリックでキャンセル）'
-    : '➕ 地図クリックで緑地を追加';
+  const name = prompt('新しい緑地の名前を入力してください', '新しい緑地');
+  if (!name) return;
+  const center = map.getCenter();
+  const thisYear = new Date().getFullYear();
+  const gs = {
+    id: uid(), name,
+    lat: center.lat, lng: center.lng,
+    memo: '', budgets: {}, records: [],
+    pdf: null, pdfName: null, pdfPins: [],
+    treeMarkers: [], mowAreas: [], mowChecks: {},
+    years: [thisYear], selectedYear: thisYear,
+    displayBudgetCategory: budgetCategories[0] || '通常予算'
+  };
+  data.push(gs);
+  save(gs);
+  renderAll();
+  openDetail(gs.id);
+  alert('新しい緑地を作成しました。\n地図上のピンをつかんで動かすと、正しい位置に調整できます。\n図面（敷地図）はまだ真っさらなので、詳細画面からアップロードしてください。');
 });
 
 document.getElementById('btnRepositionMap').addEventListener('click', () => {
@@ -2180,9 +2193,15 @@ function renderMarkers() {
   markers = {};
   data.forEach(gs => {
     if (gs.lat == null || gs.lng == null) return;
-    const marker = L.marker([gs.lat, gs.lng]).addTo(map);
+    // ピンをつかんで動かすと、その緑地の地図上の位置を変更できる（作業内容と同じ操作感）
+    const marker = L.marker([gs.lat, gs.lng], { draggable: true, autoPan: true }).addTo(map);
     marker.bindTooltip(gs.name, { permanent: true, direction: 'right', offset: [8, 0], className: 'green-name-label' });
     marker.on('click', () => openDetail(gs.id));
+    marker.on('dragend', () => {
+      const ll = marker.getLatLng();
+      gs.lat = ll.lat; gs.lng = ll.lng;
+      save(gs);
+    });
     markers[gs.id] = marker;
   });
 }
@@ -3453,15 +3472,43 @@ function budgetCatItemRowHtml(gs, r, item) {
   </div>`;
 }
 
-function renderBudgetCard(gs) {
-  ensureBudgetsShape(gs);
+// サイドバーの予算状況で表示する年度（既定は今年度）
+let budgetViewYear = new Date().getMonth() + 1 >= 4 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+// 予算表示の年度プルダウンを、データにある全年度＋今年度から作る
+function renderBudgetYearSelect() {
+  const sel = document.getElementById('budgetViewYearSelect');
+  if (!sel) return;
+  const years = new Set();
+  data.forEach(g => (g.years || []).forEach(y => years.add(Number(y))));
+  Object.keys(categoryBudgets || {}).forEach(y => years.add(Number(y)));
+  years.add(budgetViewYear);
+  const list = Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a);
+  if (!list.includes(budgetViewYear)) budgetViewYear = list[0];
+  sel.innerHTML = list.map(y => `<option value="${y}" ${y === budgetViewYear ? 'selected' : ''}>${y}年度</option>`).join('');
+}
+document.getElementById('budgetViewYearSelect').addEventListener('change', (e) => {
+  budgetViewYear = Number(e.target.value);
+  renderBudgetCard();
+});
+
+// 予算状況はサイドバーに常設（全緑地共通）。表示年度は budgetViewYear で選ぶ。
+// gs には依存しないが、緑地を開いているときはその緑地の項目に「編集」を出すため currentId を使う。
+function renderBudgetCard(gsArg) {
   const wrap = document.getElementById('budgetCardsWrap');
-  const y = gs.selectedYear;
+  if (!wrap) return;
+  // 緑地を開いた状態での呼び出しは、その緑地の年度に予算表示を合わせる
+  if (gsArg && gsArg.selectedYear != null) budgetViewYear = Number(gsArg.selectedYear);
+  renderBudgetYearSelect();
+  const y = budgetViewYear;
+  const curId = currentId;
+  const curGs = getGreen(curId);
+  const label = document.getElementById('budgetYearLabel');
+  if (label) label.textContent = y;
   // 予算は全緑地共通（categoryBudgets）。使用状況も全緑地の合算で表示する
   const budgetForYear = categoryBudgets[y] || {};
 
   if (budgetCategories.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">予算の種類が登録されていません（左のサイドバーから追加してください）</div>';
+    wrap.innerHTML = '<div class="empty-msg">予算の種類が登録されていません（下のサイドバーから追加してください）</div>';
     return;
   }
 
@@ -3511,8 +3558,8 @@ function renderBudgetCard(gs) {
         ${breakdownHtml}`;
     }
 
-    // 他の緑地の分は緑地名を付けて表示する（予算は全緑地共通のため）
-    const greenPrefix = (g) => g.id !== gs.id ? `<b>${escapeHtml(g.name)}</b>: ` : '';
+    // 各行に緑地名を付けて表示する（予算は全緑地共通のため）。開いている緑地だけは省略
+    const greenPrefix = (g) => g.id !== curId ? `<b>${escapeHtml(g.name)}</b>: ` : '';
     const plannedRowsHtml = planned.map(p => `
       <div class="budget-cat-record-row">
         <span>${escapeHtml(p.work.date || '未定')}</span>
@@ -3542,7 +3589,7 @@ function renderBudgetCard(gs) {
       <button class="outline" data-open-green="${e.g.id}">開く</button>
     </div>`;
     const recordRowsHtml = (entries.length || planned.length || plannedMow.length || plannedRepair.length)
-      ? plannedRowsHtml + entries.map(e => e.g.id === gs.id ? budgetCatItemRowHtml(gs, e.r, e.item) : foreignRowHtml(e)).join('')
+      ? plannedRowsHtml + entries.map(e => (curGs && e.g.id === curId) ? budgetCatItemRowHtml(curGs, e.r, e.item) : foreignRowHtml(e)).join('')
       : '<div class="empty-msg">この予算の作業項目はまだありません</div>';
 
     return `
@@ -3569,15 +3616,15 @@ function renderBudgetCard(gs) {
       const input = wrap.querySelector(`input[data-budget-idx="${btn.dataset.budgetSetIdx}"]`);
       const amount = input.value;
       if (amount === '') { alert('予算額を入力してください'); return; }
-      // 予算額は全緑地共通の設定として保存する
-      if (!categoryBudgets[gs.selectedYear]) categoryBudgets[gs.selectedYear] = {};
-      categoryBudgets[gs.selectedYear][cat] = Number(amount);
+      // 予算額は全緑地共通の設定として保存する（表示中の年度）
+      if (!categoryBudgets[y]) categoryBudgets[y] = {};
+      categoryBudgets[y][cat] = Number(amount);
       saveSettings();
-      renderBudgetCard(gs);
+      renderBudgetCard();
     });
   });
   wrap.querySelectorAll('button[data-cat-edit]').forEach(btn => {
-    btn.addEventListener('click', () => editRecord(gs, btn.dataset.catEdit));
+    btn.addEventListener('click', () => { if (curGs) editRecord(curGs, btn.dataset.catEdit); });
   });
   wrap.querySelectorAll('button[data-open-green]').forEach(btn => {
     btn.addEventListener('click', () => openDetail(btn.dataset.openGreen));
@@ -5887,6 +5934,7 @@ function renderAll() {
   renderContractorTags();
   renderEnvTaxBox();
   renderMowAlert();
+  renderBudgetCard(); // サイドバーの予算状況（緑地を開いていなくても表示）
   updateStorageMeter();
 }
 
