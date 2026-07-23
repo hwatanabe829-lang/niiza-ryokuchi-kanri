@@ -983,7 +983,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16p</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16q</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1003,7 +1003,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20f</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20g</p>
   </div>
 </div>
 
@@ -1116,7 +1116,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16p</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16q</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1181,8 +1181,6 @@
         <span class="lg">✅（対応済みの木）</span>
         <br><small class="help" style="margin:0;">🪓✂️🔧のマークは<b>指でつかんでそのまま動かせます</b>（軽く押して少しずらすと移動、そのままタップは詳細へジャンプ）。</small>
       </div>
-      <div id="mowAreaList" style="margin-top:8px;"></div>
-      <div id="repairList" style="margin-top:8px;"></div>
       <div id="pinList" style="margin-top:8px;"></div>
     </div>
   </div>
@@ -1192,6 +1190,18 @@
   <h3>🌳 伐採・剪定予定の木</h3>
   <div id="treeMarkerList"></div>
   <small class="help">上の「📄緑地詳細図」で配置した木がここに一覧表示されます（図面の木アイコンをタップしてもここに飛べます）。幹周・状況写真・剪定の強弱・見積額を記録できます。まだ発注に含まれていない作業は、一番下の「💾 この発注を保存」で自動的にその発注に含まれます。</small>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>🌿 草刈りエリア</h3>
+  <div id="mowAreaList"></div>
+  <small class="help">上の「📄緑地詳細図」で描いた草刈りエリアがここに一覧表示されます。面積を入れると工法の単価で見積額を自動計算します。状況（見積もり中など）はメモ欄に記入できます。</small>
+
+  <hr style="margin:16px 0; border-color:#eee;">
+
+  <h3>🔧 修繕箇所</h3>
+  <div id="repairList"></div>
+  <small class="help">上の「📄緑地詳細図」で置いた修繕箇所がここに一覧表示されます。見積額は手入力です。状況（見積もり中など）はメモ欄に記入できます。</small>
 
   <hr style="margin:16px 0; border-color:#eee;">
 
@@ -1230,14 +1240,9 @@
     <small class="help">5〜6月・9〜10月になると、未完了の緑地に自動でアラートが出ます。完了したらチェックしてください。</small>
   </div>
 
-  <hr style="margin:16px 0; border-color:#eee;">
-
-  <h3>作業履歴</h3>
-  <div class="checkbox-field">
-    <input type="checkbox" id="showAllYears">
-    <label for="showAllYears">すべての年度を表示</label>
-  </div>
-  <div id="recordTableWrap"></div>
+  <!-- 作業履歴表は「🗂️ 発注の一覧」に統合したため撤去（1つの表にまとめて分かりやすく） -->
+  <div id="recordTableWrap" style="display:none;"></div>
+  <input type="checkbox" id="showAllYears" style="display:none;">
 
   <!-- 基本情報の編集欄は不要のため非表示（緑地名は上の「✏️ 名前変更」、位置は地図ピンをつかんで移動） -->
   <details id="basicInfoDetails" style="display:none;">
@@ -1351,7 +1356,7 @@ const PEOPLE_KEY = 'niiza_green_people_v1';
 const CONTRACTORS_KEY = 'niiza_green_contractors_v1';
 const ENVTAX_BUDGET_KEY = 'niiza_envtax_budget_v1';
 const UNITPRICE_KEY = 'niiza_unit_prices_v1';
-const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '除草', '清掃', '点検', '植栽', 'その他'];
+const DEFAULT_TYPES = ['草刈り', '剪定', '伐採', '清掃', '点検', '植栽', 'その他'];
 const DEFAULT_STATUSES = ['調査中', '見積もり依頼中', '見積もり済み', '発注済み', '施工中', '施工完了', '施工書類受け取り済み', '請求書処理済み'];
 const INVESTIGATING_STATUS = '調査中'; // この状態のときは受注業者欄を出さない（まだ業者未定のため）
 const FINAL_STATUS = '請求書処理済み'; // 完了の定義＝請求書処理まで完了したこと
@@ -2730,10 +2735,12 @@ document.getElementById('btnAddType').addEventListener('click', () => {
 // 図面で管理する種別（剪定・伐採・草刈り）は「その他の作業」欄には出さない。
 // これらは図面に描いた内容がそのまま保全作業になるため。
 const MAP_TYPES = ['草刈り', '剪定', '伐採'];
+// その他の作業の候補からは、図面で管理する種別と「除草」（＝草刈りと同じなので不要）を除く
+const OTHER_TYPE_EXCLUDE = ['草刈り', '剪定', '伐採', '除草'];
 function renderRecTypeSelect() {
   const sel = document.getElementById('itemType');
   const prev = sel.value;
-  const otherTypes = types.filter(t => !MAP_TYPES.includes(t));
+  const otherTypes = types.filter(t => !OTHER_TYPE_EXCLUDE.includes(t));
   sel.innerHTML = otherTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   sel.value = otherTypes.includes(prev) ? prev : otherTypes[0];
   renderItemQtyFields(sel.value);
@@ -3266,6 +3273,8 @@ function openDetail(id) {
   renderRecordTable(gs);
   renderPdfSection(gs);
   renderTreeMarkerList(gs);
+  renderMowAreaList(gs);   // 草刈りエリアは独立セクションなので、図面が無くても一覧を出す
+  renderRepairList(gs);    // 修繕箇所も同様
   renderGreenList();
   // 写真・敷地図はこの緑地の分だけ後から読み込み、届いたら再描画する（起動と一覧を軽く保つ）
   if (!gs.__photosLoaded) {
@@ -4134,7 +4143,12 @@ function renderRoundTable(gs) {
           <button class="outline" data-round-doc="${r.id}">📄 Word</button>
         </td>
       </tr>
-    `).join('') + `</table>
+    `).join('') +
+    `<tr style="background:#e8f5e9; font-weight:bold;">
+      <td colspan="5" style="text-align:right;">この年度の発注 合計（${rounds.length}件）</td>
+      <td>¥${records.reduce((s, r) => s + Number(r.cost || 0), 0).toLocaleString()}</td>
+      <td colspan="3"></td>
+    </tr></table>
     <div style="margin-top:6px;">
       <button class="outline" id="btnMergeRounds">🔗 チェックした発注を1件に統合</button>
       <small class="help" style="display:block; margin-top:2px;">統合: まとめたい発注に「選択」でチェック→このボタン。分割: 発注の「✏️ 編集」を開き、項目ごとの「↗ 分割」で別の発注に分けられます。</small>
@@ -4488,7 +4502,10 @@ ${planImg ? `<h2>敷地図（対象箇所）</h2><img src="plan.png" width="620"
 }
 
 function renderRecordTable(gs) {
+  // 作業履歴表は「発注の一覧」に統合済み。ここでは発注一覧だけを描画する。
   renderRoundTable(gs);
+  return;
+  // 以下は旧・作業履歴表（未使用）
   const wrap = document.getElementById('recordTableWrap');
   const showAll = document.getElementById('showAllYears').checked;
   const filtered = showAll ? gs.records : gs.records.filter(r => String(r.year) === String(gs.selectedYear));
@@ -5122,10 +5139,10 @@ function renderMowAreaList(gs) {
   const wrap = document.getElementById('mowAreaList');
   ensureMowShape(gs);
   if (gs.mowAreas.length === 0) {
-    wrap.innerHTML = '';
+    wrap.innerHTML = '<div class="empty-msg">草刈りエリアはまだありません（図面で「🌿 配置図クリックで草刈りエリアを描く」から追加できます）</div>';
     return;
   }
-  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🌿 草刈りエリア（面積を入れると工法の単価で見積額を自動計算）</label>' + gs.mowAreas.map(a => `
+  wrap.innerHTML = gs.mowAreas.map(a => `
     <div class="work-row wr-mow" data-mow-row="${a.id}">
       <span class="work-type-badge">🌿草刈り</span>
       <strong>${escapeHtml(a.label)}</strong>
@@ -5147,6 +5164,7 @@ function renderMowAreaList(gs) {
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
       ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${a.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-mow-select="${a.id}" ${a.selected !== false ? 'checked' : ''}>今回発注</label>`}
+      <input type="text" data-mow-note="${a.id}" value="${escapeHtml(a.note || '')}" placeholder="メモ（見積もり中・状況など）">
       <button class="outline" data-mow-photo-btn="${a.id}" title="このエリアの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-mow-photo="${a.id}" style="display:none;">
       ${a.photo ? `<img class="spot-photo-thumb" src="${a.photo}" data-mow-photo-view="${a.id}" title="タップで拡大">` : ''}
@@ -5177,6 +5195,12 @@ function renderMowAreaList(gs) {
     img.addEventListener('click', () => {
       document.getElementById('photoModalImg').src = img.src;
       document.getElementById('photoModal').style.display = 'flex';
+    });
+  });
+  wrap.querySelectorAll('input[data-mow-note]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const a = gs.mowAreas.find(x => x.id === inp.dataset.mowNote);
+      if (a) { a.note = inp.value; save(); }
     });
   });
   wrap.querySelectorAll('input[data-mow-sqm]').forEach(inp => {
@@ -5277,10 +5301,10 @@ function renderRepairList(gs) {
   const wrap = document.getElementById('repairList');
   ensureRepairShape(gs);
   if (gs.repairSpots.length === 0) {
-    wrap.innerHTML = '';
+    wrap.innerHTML = '<div class="empty-msg">修繕箇所はまだありません（図面で「🔧 配置図クリックで修繕箇所を追加」から追加できます）</div>';
     return;
   }
-  wrap.innerHTML = '<label style="font-size:12px; color:#555;">🔧 修繕箇所（見積額は手入力）</label>' + gs.repairSpots.map(s => `
+  wrap.innerHTML = gs.repairSpots.map(s => `
     <div class="work-row wr-repair" data-repair-row="${s.id}">
       <span class="work-type-badge">🔧修繕</span>
       <strong>${escapeHtml(s.label)}</strong>
@@ -5293,12 +5317,19 @@ function renderRepairList(gs) {
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
       ${s.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${s.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-repair-select="${s.id}" ${s.selected !== false ? 'checked' : ''}>今回発注</label>`}
+      <input type="text" data-repair-note="${s.id}" value="${escapeHtml(s.note || '')}" placeholder="メモ（見積もり中・状況など）">
       <button class="outline" data-repair-photo-btn="${s.id}" title="この箇所の状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-repair-photo="${s.id}" style="display:none;">
       ${s.photo ? `<img class="spot-photo-thumb" src="${s.photo}" data-repair-photo-view="${s.id}" title="タップで拡大">` : ''}
       <button class="danger" data-repair-del="${s.id}">削除</button>
     </div>
   `).join('');
+  wrap.querySelectorAll('input[data-repair-note]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const s = gs.repairSpots.find(x => x.id === inp.dataset.repairNote);
+      if (s) { s.note = inp.value; save(); }
+    });
+  });
   wrap.querySelectorAll('button[data-repair-move]').forEach(btn => {
     btn.addEventListener('click', () => armSpotMove(gs, 'repair', btn.dataset.repairMove));
   });
