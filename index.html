@@ -983,7 +983,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16s</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16t</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1003,7 +1003,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21c</p>
   </div>
 </div>
 
@@ -1116,7 +1116,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16s</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16t</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -2620,12 +2620,16 @@ function renderTreeMarkerList(gs) {
   });
   wrap.querySelectorAll('button[data-del-work]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!confirm('この作業履歴を削除しますか？')) return;
       const [treeId, workId] = btn.dataset.delWork.split('|');
       const t = gs.treeMarkers.find(x => x.id === treeId);
-      if (t) {
-        t.works = t.works.filter(w => w.id !== workId);
+      const w = t && (t.works || []).find(x => x.id === workId);
+      if (!w) return;
+      if (!confirmDeleteWithRecords(gs, 'work', workId, `${t.label} の${w.type}`)) return;
+      {
+        purgeFromRecords(gs, 'work', workId, { cost: Number(w.amount || 0) });
+        t.works = t.works.filter(x => x.id !== workId);
         save();
+        renderRecordTable(gs);
         renderTreeMarkers();
         renderPdfPins(gs);
         renderTreeMarkerList(gs);
@@ -2635,13 +2639,19 @@ function renderTreeMarkerList(gs) {
   });
   wrap.querySelectorAll('button[data-del-tree]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!confirm('この木のマーカーを削除しますか？')) return;
-      if (treeMoveTargetId === btn.dataset.delTree) { treeMoveTargetId = null; renderTreeMoveBanner(gs); }
-      gs.treeMarkers = gs.treeMarkers.filter(t => t.id !== btn.dataset.delTree);
+      const delId = btn.dataset.delTree;
+      const tree = gs.treeMarkers.find(t => t.id === delId);
+      if (!tree) return;
+      if (!confirmDeleteWithRecords(gs, 'tree', delId, tree.label)) return;
+      if (treeMoveTargetId === delId) { treeMoveTargetId = null; renderTreeMoveBanner(gs); }
+      const treeCost = (tree.works || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+      purgeFromRecords(gs, 'tree', delId, { cost: treeCost });
+      gs.treeMarkers = gs.treeMarkers.filter(t => t.id !== delId);
       save();
       renderTreeMarkers();
       renderPdfPins(gs);
       renderTreeMarkerList(gs);
+      renderRecordTable(gs);
       renderBudgetCard(gs);
     });
   });
@@ -2790,6 +2800,76 @@ function consumeTreeMarkers(gs, type, count, recordId) {
 }
 function releaseTreeMarkers(gs, recordId) {
   allWorks(gs).forEach(w => { if (w.consumedBy === recordId) w.consumedBy = null; });
+}
+
+// ---- 削除したものを発注の内容からも取り除く ----
+// 木・草刈りエリア・修繕を消したのに、発注の一覧に項目が残り続けるのを防ぐ。
+// 対象を参照している項目から参照を外し、数量と金額を減らす。
+// 参照が空になった項目は消し、発注全体の金額も計算し直す。
+function findRecordsReferencing(gs, kind, id) {
+  return (gs.records || []).filter(r => (r.items || []).some(it => {
+    if (kind === 'tree') return (it.workRefs || []).some(ref => ref.treeId === id);
+    if (kind === 'work') return (it.workRefs || []).some(ref => ref.workId === id);
+    if (kind === 'area') return (it.areaRefs || []).includes(id);
+    if (kind === 'repair') return (it.repairRefs || []).includes(id);
+    return false;
+  }));
+}
+function purgeFromRecords(gs, kind, id, removedAmount) {
+  (gs.records || []).forEach(r => {
+    let touched = false;
+    (r.items || []).forEach(it => {
+      let removed = 0;
+      if (kind === 'tree' && it.workRefs) {
+        const before = it.workRefs.length;
+        it.workRefs = it.workRefs.filter(ref => ref.treeId !== id);
+        removed = before - it.workRefs.length;
+      } else if (kind === 'work' && it.workRefs) {
+        const before = it.workRefs.length;
+        it.workRefs = it.workRefs.filter(ref => ref.workId !== id);
+        removed = before - it.workRefs.length;
+      } else if (kind === 'area' && it.areaRefs) {
+        const before = it.areaRefs.length;
+        it.areaRefs = it.areaRefs.filter(x => x !== id);
+        removed = before - it.areaRefs.length;
+      } else if (kind === 'repair' && it.repairRefs) {
+        const before = it.repairRefs.length;
+        it.repairRefs = it.repairRefs.filter(x => x !== id);
+        removed = before - it.repairRefs.length;
+      }
+      if (removed > 0) {
+        touched = true;
+        if (it.qty != null) it.qty = Math.max(0, Number(it.qty) - (kind === 'area' ? Number(removedAmount && removedAmount.sqm || 0) : removed));
+        const minus = Number((removedAmount && removedAmount.cost) || 0);
+        it.cost = Math.max(0, Number(it.cost || 0) - minus);
+      }
+    });
+    if (touched) {
+      // どの対象も参照しなくなった項目は、発注から取り除く
+      r.items = (r.items || []).filter(it => {
+        const hadRefs = it.workRefs || it.areaRefs || it.repairRefs;
+        if (!hadRefs) return true; // 手入力の「その他の作業」はそのまま残す
+        return (it.workRefs && it.workRefs.length) || (it.areaRefs && it.areaRefs.length) || (it.repairRefs && it.repairRefs.length);
+      });
+      r.cost = (r.items || []).reduce((s, i) => s + Number(i.cost || 0), 0);
+    }
+  });
+  // 中身がすべて無くなった発注は、表に「¥0」で残らないよう取り除く
+  const emptied = (gs.records || []).filter(r => !(r.items || []).length);
+  if (emptied.length) {
+    emptied.forEach(r => {
+      if (selectedRoundId === r.id) selectedRoundId = null;
+      if (editingRecordId === r.id) editingRecordId = null;
+    });
+    gs.records = (gs.records || []).filter(r => (r.items || []).length);
+  }
+}
+// 削除前の確認メッセージ（どの発注に入っているか知らせる）
+function confirmDeleteWithRecords(gs, kind, id, name) {
+  const recs = findRecordsReferencing(gs, kind, id);
+  if (recs.length === 0) return confirm(`「${name}」を削除しますか？`);
+  const list = recs.map(r => `・${r.date || '日付未定'}（${r.status || '-'}）`).join('\n');
+  return confirm(`「${name}」は次の発注に含まれています:\n\n${list}\n\n削除すると、これらの発注の内容からも取り除かれ、金額も差し引かれます。よろしいですか？`);
 }
 
 // Each work type has a natural unit: 草刈り/清掃→㎡、剪定→強剪定/弱剪定+本数、伐採→本。
@@ -5466,10 +5546,15 @@ function renderMowAreaList(gs) {
   });
   wrap.querySelectorAll('button[data-mow-del]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!confirm('この草刈りエリアを削除しますか？')) return;
-      gs.mowAreas = gs.mowAreas.filter(a => a.id !== btn.dataset.mowDel);
+      const delId = btn.dataset.mowDel;
+      const area = gs.mowAreas.find(a => a.id === delId);
+      if (!area) return;
+      if (!confirmDeleteWithRecords(gs, 'area', delId, `草刈りエリア「${area.label}」`)) return;
+      purgeFromRecords(gs, 'area', delId, { cost: Number(area.amount || 0), sqm: Number(area.sqm || 0) });
+      gs.mowAreas = gs.mowAreas.filter(a => a.id !== delId);
       save();
       renderPdfPins(gs);
+      renderRecordTable(gs);
       renderBudgetCard(gs);
     });
   });
@@ -5585,10 +5670,15 @@ function renderRepairList(gs) {
   });
   wrap.querySelectorAll('button[data-repair-del]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!confirm('この修繕箇所を削除しますか？')) return;
-      gs.repairSpots = gs.repairSpots.filter(s => s.id !== btn.dataset.repairDel);
+      const delId = btn.dataset.repairDel;
+      const spot = gs.repairSpots.find(s => s.id === delId);
+      if (!spot) return;
+      if (!confirmDeleteWithRecords(gs, 'repair', delId, `修繕箇所「${spot.label}」`)) return;
+      purgeFromRecords(gs, 'repair', delId, { cost: Number(spot.amount || 0) });
+      gs.repairSpots = gs.repairSpots.filter(s => s.id !== delId);
       save();
       renderPdfPins(gs);
+      renderRecordTable(gs);
       renderBudgetCard(gs);
     });
   });
