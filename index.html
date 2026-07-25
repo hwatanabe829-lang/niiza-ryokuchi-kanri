@@ -983,7 +983,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16r</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16s</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1003,7 +1003,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21b</p>
   </div>
 </div>
 
@@ -1116,7 +1116,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16r</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16s</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1149,6 +1149,7 @@
     <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
     <div id="planZoomBar" style="display:none; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
       <button class="outline" id="btnPlanFullscreen" style="min-height:0; padding:4px 12px;">⛶ 全画面で図面を操作</button>
+      <button class="outline" id="btnUndoMove" style="min-height:0; padding:4px 12px; display:none; background:#fff8e1; border-color:#ffb300;">↩️ 位置を元に戻す</button>
       <button class="outline" id="btnPlanZoomOut" style="min-height:0; padding:4px 14px;">🔍－</button>
       <button class="outline" id="btnPlanZoomIn" style="min-height:0; padding:4px 14px;">🔍＋</button>
       <span id="planZoomLabel" style="font-size:12px; color:#555; font-weight:bold;">×1</span>
@@ -1601,7 +1602,7 @@ function renderPlanEstimateTotal() {
         <span style="margin-left:auto; font-size:18px; font-weight:bold; color:#1b5e20;">¥${total.toLocaleString()}</span>
       </div>
       ${parts.length ? `<div style="font-size:12px; color:#555; margin-top:4px;">内訳: ${parts.join(' ／ ')}</div>` : '<div style="font-size:12px; color:#999; margin-top:4px;">まだ見積のある作業がありません</div>'}
-      <small class="help" style="margin-top:4px;">この金額が一番下の「💾 この発注を保存」で1件の発注になります。</small>
+      <small class="help" style="margin-top:4px;">この金額が一番下の「💾 この発注を保存」で1件の発注になります。<br>発注済みの分はここには含みません（金額は消えず、上の「🗂️ 発注の一覧」で確認できます）。</small>
     </div>`;
 }
 
@@ -2254,7 +2255,12 @@ function attachDelayedMarkerDrag(marker, gs) {
     if (active) {
       active = false;
       map.dragging.enable();
-      if (moved) { const ll = marker.getLatLng(); gs.lat = ll.lat; gs.lng = ll.lng; save(gs); }
+      if (moved) {
+        // 動かす前の地図位置を覚えておき、「↩️ 元に戻す」で戻せるようにする
+        const blat = gs.lat, blng = gs.lng;
+        pushMoveUndo(`緑地「${gs.name}」`, () => { gs.lat = blat; gs.lng = blng; save(gs); });
+        const ll = marker.getLatLng(); gs.lat = ll.lat; gs.lng = ll.lng; save(gs);
+      }
     }
     // ドラッグ直後の click 抑止フラグは少し後に戻す
     setTimeout(() => { marker.__wasDragged = false; }, 50);
@@ -2406,7 +2412,7 @@ function renderTreeMarkerList(gs) {
             ${!w.consumedBy && !w.done ? `<label class="work-done-check select-check${w.selected === false ? ' off' : ''}" title="今回の発注に含めるか。外すと『作業予定なし』として今回の発注に入りません"><input type="checkbox" data-work-select="${t.id}|${w.id}" ${w.selected !== false ? 'checked' : ''}>今回発注</label>` : ''}
             <label class="work-done-check"><input type="checkbox" data-work-done="${t.id}|${w.id}" ${w.done ? 'checked' : ''}>対応済み</label>
             <input type="text" data-work-note="${t.id}|${w.id}" value="${escapeHtml(w.note || '')}" placeholder="メモ（状況など）">
-            ${w.consumedBy ? '<span class="env-tax-badge">記録済み</span>' : ''}
+            ${w.consumedBy ? `<span class="env-tax-badge">発注済み${w.amount != null ? ` ¥${Number(w.amount).toLocaleString()}` : ''}</span>` : ''}
             <button class="danger" data-del-work="${t.id}|${w.id}">削除</button>
           </div>
         `).join('') || '<div class="empty-msg">作業履歴はまだありません</div>'}
@@ -4742,6 +4748,7 @@ function applyPlanZoom() {
     canvas.style.width = Math.round(base * planZoom) + 'px';
   }
 }
+document.getElementById('btnUndoMove').addEventListener('click', undoLastMove);
 document.getElementById('btnPlanZoomIn').addEventListener('click', () => {
   planZoom = Math.min(4, planZoom + 1);
   applyPlanZoom();
@@ -4965,8 +4972,59 @@ function jumpToTreeCard(treeId) {
 // Androidの長押しはブラウザがスクロール判定で横取りして効きにくいため、
 // 「押して少し動かしたら＝つかんで移動、動かさず離したら＝タップ（詳細へ）」という
 // 動きベースの判定にする。タップと移動が確実に見分けられる。
+// ---- 位置変更の取り消し（間違って動かしてしまった時に1つずつ戻せる） ----
+// 移動する直前の位置を覚えておき、「↩️ 位置を元に戻す」で戻す。最大20回分。
+let moveUndoStack = [];
+function pushMoveUndo(label, undoFn) {
+  moveUndoStack.push({ label, undoFn });
+  if (moveUndoStack.length > 20) moveUndoStack.shift();
+  showUndoToast(label);
+  refreshUndoButton();
+}
+function undoLastMove() {
+  const item = moveUndoStack.pop();
+  if (!item) return;
+  item.undoFn();
+  save();
+  const gs = getGreen(currentId);
+  if (gs) { renderPdfPins(gs); renderTreeMarkerList(gs); }
+  renderMarkers();
+  refreshUndoButton();
+  hideUndoToast();
+}
+function refreshUndoButton() {
+  const btn = document.getElementById('btnUndoMove');
+  if (!btn) return;
+  btn.style.display = moveUndoStack.length ? '' : 'none';
+  btn.textContent = `↩️ 位置を元に戻す（${moveUndoStack.length}）`;
+}
+// 動かした直後に画面下へ出る取り消し案内（現場で気づきやすいように）
+let undoToastTimer = null;
+function showUndoToast(label) {
+  let el = document.getElementById('undoToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'undoToast';
+    el.style.cssText = 'position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#333; color:white;'
+      + 'padding:10px 14px; border-radius:8px; z-index:6000; font-size:13px; display:flex; align-items:center; gap:10px;'
+      + 'box-shadow:0 3px 10px rgba(0,0,0,0.4); max-width:92vw;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<span>${escapeHtml(label)}を動かしました</span>`
+    + `<button type="button" id="btnUndoToast" style="min-height:0; padding:5px 12px; font-size:13px; background:#ffb300; color:#3e2723; border:none; border-radius:6px; font-weight:bold;">↩️ 元に戻す</button>`;
+  el.style.display = 'flex';
+  document.getElementById('btnUndoToast').addEventListener('click', undoLastMove);
+  clearTimeout(undoToastTimer);
+  undoToastTimer = setTimeout(hideUndoToast, 8000);
+}
+function hideUndoToast() {
+  const el = document.getElementById('undoToast');
+  if (el) el.style.display = 'none';
+  clearTimeout(undoToastTimer);
+}
+
 function makeIconDraggable(el, opts) {
-  // opts: { setXY(x,y), onTap(), onDragEnd() }
+  // opts: { setXY(x,y), onTap(), onDragEnd(), undoLabel, getXY() }
   let downX = 0, downY = 0, dragging = false, pid = null, justDragged = false;
   el.addEventListener('pointerdown', (e) => {
     if (e.button != null && e.button > 0) return;
@@ -4975,6 +5033,7 @@ function makeIconDraggable(el, opts) {
     pid = e.pointerId;
     downX = e.clientX; downY = e.clientY;
     dragging = false;
+    el.__beforeXY = opts.getXY ? opts.getXY() : null; // 動かす前の位置（取り消し用）
     try { el.setPointerCapture(pid); } catch (_) {}
     e.stopPropagation();
   });
@@ -5006,7 +5065,14 @@ function makeIconDraggable(el, opts) {
       justDragged = true;
       el.classList.remove('dragging');
       const xy = el.__dragXY;
-      if (xy) { opts.setXY(xy.x, xy.y); save(); if (opts.onDragEnd) opts.onDragEnd(); }
+      if (xy) {
+        // 動かす前の位置を覚えておき、「↩️ 元に戻す」で戻せるようにする
+        const before = el.__beforeXY;
+        if (before && opts.undoLabel) {
+          pushMoveUndo(opts.undoLabel, () => opts.setXY(before.x, before.y));
+        }
+        opts.setXY(xy.x, xy.y); save(); if (opts.onDragEnd) opts.onDragEnd();
+      }
     }
   };
   el.addEventListener('pointerup', finish);
@@ -5148,6 +5214,8 @@ function renderPdfPins(gs) {
     pin.title = `${p.label} タップで下の詳細へ・つかんで移動`;
     // つかんで移動 or タップで一覧へ
     makeIconDraggable(pin, {
+      undoLabel: `ピン「${p.label}」`,
+      getXY: () => ({ x: p.x, y: p.y }),
       setXY: (x, y) => { p.x = x; p.y = y; },
       onDragEnd: () => { renderPdfPins(gs); },
       onTap: jumpToPinRow,
@@ -5178,6 +5246,8 @@ function renderPdfPins(gs) {
       icon.title = `${t.label}（${treeWorksSummary(t)}）タップで下の詳細へ・つかんで移動`;
       // つかんで移動 or タップで詳細へ
       makeIconDraggable(icon, {
+        undoLabel: `「${t.label}」`,
+        getXY: () => ({ x: t.x, y: t.y }),
         setXY: (x, y) => { t.x = x; t.y = y; },
         onDragEnd: () => { renderPdfPins(gs); },
         onTap: () => jumpToTreeCard(t.id),
@@ -5202,6 +5272,8 @@ function renderPdfPins(gs) {
     icon.title = `${s.label}${s.consumedBy ? '（記録済）' : ''}タップで下の詳細へ・つかんで移動`;
     // つかんで移動 or タップで修繕リストの該当行へ
     makeIconDraggable(icon, {
+      undoLabel: `修繕「${s.label}」`,
+      getXY: () => ({ x: s.x, y: s.y }),
       setXY: (x, y) => { s.x = x; s.y = y; },
       onDragEnd: () => { renderPdfPins(gs); },
       onTap: () => {
@@ -5270,7 +5342,7 @@ function renderMowAreaList(gs) {
       <select data-mow-budget="${a.id}" style="font-size:12px; padding:2px;">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(a.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
-      ${a.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${a.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-mow-select="${a.id}" ${a.selected !== false ? 'checked' : ''}>今回発注</label>`}
+      ${a.consumedBy ? `<span class="env-tax-badge">発注済み${a.amount != null ? ` ¥${Number(a.amount).toLocaleString()}` : ''}</span>` : `<label class="work-done-check select-check${a.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-mow-select="${a.id}" ${a.selected !== false ? 'checked' : ''}>今回発注</label>`}
       <input type="text" data-mow-note="${a.id}" value="${escapeHtml(a.note || '')}" placeholder="メモ（見積もり中・状況など）">
       <button class="outline" data-mow-photo-btn="${a.id}" title="このエリアの状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-mow-photo="${a.id}" style="display:none;">
@@ -5435,7 +5507,7 @@ function renderRepairList(gs) {
       <select data-repair-budget="${s.id}">
         ${budgetCategories.map(cat => `<option value="${escapeHtml(cat)}" ${(s.budgetCategory || budgetCategories[0]) === cat ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
       </select>
-      ${s.consumedBy ? '<span class="env-tax-badge">記録済</span>' : `<label class="work-done-check select-check${s.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-repair-select="${s.id}" ${s.selected !== false ? 'checked' : ''}>今回発注</label>`}
+      ${s.consumedBy ? `<span class="env-tax-badge">発注済み${s.amount != null ? ` ¥${Number(s.amount).toLocaleString()}` : ''}</span>` : `<label class="work-done-check select-check${s.selected === false ? ' off' : ''}" title="今回の発注に含めるか"><input type="checkbox" data-repair-select="${s.id}" ${s.selected !== false ? 'checked' : ''}>今回発注</label>`}
       <input type="text" data-repair-note="${s.id}" value="${escapeHtml(s.note || '')}" placeholder="メモ（見積もり中・状況など）">
       <button class="outline" data-repair-photo-btn="${s.id}" title="この箇所の状況写真を貼る" style="min-height:0; padding:2px 6px; font-size:12px;">📷</button>
       <input type="file" accept="image/*" data-repair-photo="${s.id}" style="display:none;">
@@ -5696,6 +5768,8 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
   if (treeMoveTargetId) {
     const t = gs.treeMarkers && gs.treeMarkers.find(m => m.id === treeMoveTargetId);
     if (t) {
+      const bx = t.x, by = t.y;
+      pushMoveUndo(`「${t.label}」`, () => { t.x = bx; t.y = by; });
       t.x = x; t.y = y;
       save();
       renderPdfPins(gs);
@@ -5710,14 +5784,24 @@ document.getElementById('pdfCanvasHolder').addEventListener('click', (e) => {
     const { kind, id } = spotMoveTarget;
     if (kind === 'pin') {
       const p = (gs.pdfPins || []).find(q => q.id === id);
-      if (p) { p.x = x; p.y = y; }
+      if (p) {
+        const bx = p.x, by = p.y;
+        pushMoveUndo(`ピン「${p.label}」`, () => { p.x = bx; p.y = by; });
+        p.x = x; p.y = y;
+      }
     } else if (kind === 'repair') {
       const s = (gs.repairSpots || []).find(q => q.id === id);
-      if (s) { s.x = x; s.y = y; }
+      if (s) {
+        const bx = s.x, by = s.y;
+        pushMoveUndo(`修繕「${s.label}」`, () => { s.x = bx; s.y = by; });
+        s.x = x; s.y = y;
+      }
     } else if (kind === 'mow') {
       // エリアは形を保ったまま、タップした場所が中心になるよう全体を平行移動する
       const a = (gs.mowAreas || []).find(q => q.id === id);
       if (a && a.points && a.points.length) {
+        const beforePoints = a.points.map(p => ({ x: p.x, y: p.y }));
+        pushMoveUndo(`草刈り「${a.label}」`, () => { a.points = beforePoints; });
         const cen = mowAreaCentroid(a.points);
         let dx = x - cen.x, dy = y - cen.y;
         // 図面からはみ出さない範囲に移動量を抑える
