@@ -983,7 +983,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16q</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16r</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1003,7 +1003,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-20g</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21a</p>
   </div>
 </div>
 
@@ -1116,7 +1116,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16q</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16r</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1194,6 +1194,11 @@
   <hr style="margin:16px 0; border-color:#eee;">
 
   <h3>🌿 草刈りエリア</h3>
+  <div class="field" style="max-width:320px;">
+    <label>この緑地全体の面積（㎡）</label>
+    <input type="text" inputmode="numeric" id="greenTotalArea" placeholder="例: 1,200">
+    <small class="help">緑地全体の広さの目安です。草刈りエリアごとの面積は下の各行に入れてください。</small>
+  </div>
   <div id="mowAreaList"></div>
   <small class="help">上の「📄緑地詳細図」で描いた草刈りエリアがここに一覧表示されます。面積を入れると工法の単価で見積額を自動計算します。状況（見積もり中など）はメモ欄に記入できます。</small>
 
@@ -1609,6 +1614,9 @@ let repairAddMode = false; // 配置図クリックで修繕箇所を追加す�
 let hasAutoZoomed = false; // only force a zoom-in the first time any green space is opened
 let pdfTreeAddMode = null; // '伐採' | '剪定' | null — plotting a tree marker directly on the site-plan canvas
 let selectedRoundId = null; // record id whose site-plan trees are being isolated in the "作業回ごとの管理" table
+// 新しい発注を作るときの図面は、過去の発注で済んだ作業を隠して「まっさら」にする。
+// true にすると過去の分も含めてすべて表示する（確認したいとき用）
+let planShowAll = false;
 let mowDrawMode = false;    // clicking the site plan adds vertices of a new 草刈りエリア polygon
 let mowDraftPoints = [];    // vertices (%) of the polygon being drawn
 let treeMoveTargetId = null; // 誤タップした木を敷地図タップで置き直すモード（現場スマホ向け）
@@ -2334,9 +2342,22 @@ function renderTreeMarkers() {
 
 function renderTreeMarkerList(gs) {
   const wrap = document.getElementById('treeMarkerList');
-  const list = (gs.treeMarkers || []).map(normalizeTreeMarker);
+  let list = (gs.treeMarkers || []).map(normalizeTreeMarker);
+  const allTotal = list.length;
+  // 図面と同じ絞り込み: 発注を選んでいればその発注の木だけ、
+  // 新しい発注を作っている最中は、まだどの発注にも入っていない木だけを出す
+  const selRound = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
+  if (selRound) {
+    const ids = new Set();
+    (selRound.items || []).forEach(it => (it.workRefs || []).forEach(ref => ids.add(ref.treeId)));
+    list = list.filter(t => ids.has(t.id));
+  } else if (!planShowAll) {
+    list = list.filter(t => (t.works || []).some(w => !w.consumedBy));
+  }
   if (list.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">伐採・剪定予定の木はまだ登録されていません</div>';
+    wrap.innerHTML = allTotal === 0
+      ? '<div class="empty-msg">伐採・剪定予定の木はまだ登録されていません</div>'
+      : '<div class="empty-msg">この発注に含まれる木はありません（過去の発注分は上の「過去の分も表示する」で確認できます）</div>';
     return;
   }
   wrap.innerHTML = list.map(t => `
@@ -3223,6 +3244,15 @@ document.getElementById('yearSelect').addEventListener('change', (e) => {
   renderTreeMarkerList(gs);
 });
 
+// 緑地全体の面積（草刈りの目安）。カンマ付きで入力・表示する
+document.getElementById('greenTotalArea').addEventListener('change', (e) => {
+  const gs = getGreen(currentId);
+  if (!gs) return;
+  gs.totalArea = parseAmountInput(e.target.value);
+  e.target.value = formatAmountInput(gs.totalArea);
+  save();
+});
+
 document.getElementById('btnAddYear').addEventListener('click', () => {
   const gs = getGreen(currentId);
   if (!gs) return;
@@ -3244,6 +3274,7 @@ document.getElementById('btnAddYear').addEventListener('click', () => {
 function openDetail(id) {
   currentId = id;
   selectedRoundId = null;
+  planShowAll = false; // 開いた直後は「これから作る発注」の図面（過去の分は隠す）
   const gs = getGreen(id);
   if (!gs) return;
   if (gs.lat != null && gs.lng != null) {
@@ -3275,6 +3306,7 @@ function openDetail(id) {
   renderTreeMarkerList(gs);
   renderMowAreaList(gs);   // 草刈りエリアは独立セクションなので、図面が無くても一覧を出す
   renderRepairList(gs);    // 修繕箇所も同様
+  document.getElementById('greenTotalArea').value = formatAmountInput(gs.totalArea);
   renderGreenList();
   // 写真・敷地図はこの緑地の分だけ後から読み込み、届いたら再描画する（起動と一覧を軽く保つ）
   if (!gs.__photosLoaded) {
@@ -4164,8 +4196,10 @@ function renderRoundTable(gs) {
   wrap.querySelectorAll('button[data-round]').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedRoundId = (selectedRoundId === btn.dataset.round) ? null : btn.dataset.round;
+      planShowAll = false;
       renderRoundTable(gs);
       renderPdfPins(gs);
+      renderTreeMarkerList(gs); // 木の一覧もこの発注の分だけに切り替える
       // 選んだ回の内容ボックスが見えるようスクロールする
       if (selectedRoundId) document.getElementById('roundSummaryBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
@@ -4190,8 +4224,9 @@ function renderRoundTable(gs) {
 function collectMapItems(gs) {
   const items = [];
   ['伐採', '剪定'].forEach(type => {
-    // done（対応済み）と、今回発注に含めない（作業予定なし）ものは除く
-    const cands = collectPickableWorks(gs, type).filter(c => !c.done && c.selected !== false);
+    // 「今回発注」のチェックを外したもの（作業予定なし）だけ除く。
+    // 「対応済み」でも未発注なら発注に含める（対応済み＝実施が終わった印で、発注の可否とは別）
+    const cands = collectPickableWorks(gs, type).filter(c => c.selected !== false);
     if (!cands.length) return;
     // 予算ごと（剪定は強/弱ごとにも）にまとめて1項目にする
     const groups = {};
@@ -4292,11 +4327,14 @@ document.getElementById('btnNewRound').addEventListener('click', () => {
   // 編集中なら、消し込みを元に戻して編集を中止してから新規に入る
   if (editingRecordId) document.getElementById('btnCancelEdit').click();
   selectedRoundId = null;               // 図面の「特定の発注だけ表示」を解除
+  planShowAll = false;                  // 図面を「まっさら（未発注の分だけ）」に戻す
   resetRecordForm();
   const nextNo = (gs.records.filter(r => String(r.year) === String(gs.selectedYear)).length) + 1;
   renderRoundTable(gs);
   renderPdfPins(gs);
   renderTreeMarkerList(gs);
+  renderMowAreaList(gs);
+  renderRepairList(gs);
   alert(`新しい発注（この年度で ${nextNo} 件目）を作成します。\n\n① 図面の木・草刈り・修繕で「今回発注」にチェックを入れる\n② 必要なら「🧾 その他の作業」を追加\n③ 一番下の「💾 この発注を保存」で登録\n\nの順で入力してください。`);
   const heading = document.getElementById('recordFormHeading');
   if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4326,8 +4364,21 @@ function renderRoundSummary(gs) {
       }).filter(Boolean);
       if (names.length) targetNames = ` [${names.join('・')}]`;
     }
+    // この項目の作業が実際に終わっているか（木は「対応済み」チェックの数で数える）
+    let doneBadge = '';
+    if (it.workRefs && it.workRefs.length) {
+      const doneCount = it.workRefs.filter(ref => {
+        const tree = (gs.treeMarkers || []).find(x => x.id === ref.treeId);
+        const w = tree && (tree.works || []).find(x => x.id === ref.workId);
+        return w && w.done;
+      }).length;
+      doneBadge = doneCount === it.workRefs.length
+        ? '<span class="complete-badge">✅ 作業済み</span>'
+        : `<span class="status-badge">作業済み ${doneCount}/${it.workRefs.length}本</span>`;
+    }
     return `<div class="budget-cat-record-row">
       <span>${escapeHtml(t || '-')}${q ? ' ' + escapeHtml(q) : ''}${escapeHtml(targetNames)}</span>
+      ${doneBadge}
       ${it.envTax ? '<span class="env-tax-badge">🌲 環境譲与税</span>' : ''}
       <span>${escapeHtml(it.budgetCategory || '-')}</span>
       <span class="brow-cost">¥${Number(it.cost || 0).toLocaleString()}</span>
@@ -4337,16 +4388,28 @@ function renderRoundSummary(gs) {
   box.innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
       <b>📌 ${roundNo}回目の発注（${escapeHtml(r.date || '日付未定')}）</b>
-      <span class="status-badge">${escapeHtml(r.status || '-')}</span>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px;">進捗
+        <select id="roundSummaryStatus" style="font-size:12px; padding:2px;">
+          ${statuses.map(s => `<option value="${escapeHtml(s)}" ${s === r.status ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </label>
       <span style="margin-left:auto; font-weight:bold;">合計 ¥${total.toLocaleString()}</span>
       <button class="outline" id="btnRoundSummaryClose" style="min-height:0; padding:3px 10px; font-size:12px;">✕ 選択解除</button>
     </div>
     ${rowsHtml}
-    <small class="help" style="display:block; margin-top:6px;">下の図面には、この発注の対象（伐採・剪定の木、草刈りエリア）だけが表示されています。</small>`;
+    <small class="help" style="display:block; margin-top:6px;">下の図面には、この発注の対象（伐採・剪定の木・草刈りエリア・修繕）だけが表示されています。内容を直すときは表の「✏️ 編集」を押してください。</small>`;
+  // 進捗（見積もり中・発注済みなど）はここから直接変えられる
+  document.getElementById('roundSummaryStatus').addEventListener('change', (e) => {
+    r.status = e.target.value;
+    save();
+    renderRoundTable(gs);
+    renderGreenList();
+  });
   document.getElementById('btnRoundSummaryClose').addEventListener('click', () => {
     selectedRoundId = null;
     renderRoundTable(gs);
     renderPdfPins(gs);
+    renderTreeMarkerList(gs);
   });
 }
 
@@ -4986,9 +5049,41 @@ function renderPdfPins(gs) {
       renderRoundTable(gs);
       renderPdfPins(gs);
     });
+  } else if (!planShowAll) {
+    // 発注を選んでいない＝新しい発注を作っている状態。
+    // 過去の発注で済んだ作業は図面から隠し、まだどの発注にも入っていない分だけを出す
+    // （発注が増えても図面がごちゃつかず、毎回まっさらな図面から始められる）
+    allowedTreeIds = new Set();
+    allowedAreaIds = new Set();
+    allowedRepairIds = new Set();
+    let hidden = 0;
+    (gs.treeMarkers || []).forEach(t => {
+      if ((t.works || []).some(w => !w.consumedBy)) allowedTreeIds.add(t.id); else hidden++;
+    });
+    (gs.mowAreas || []).forEach(a => { if (!a.consumedBy) allowedAreaIds.add(a.id); else hidden++; });
+    (gs.repairSpots || []).forEach(s => { if (!s.consumedBy) allowedRepairIds.add(s.id); else hidden++; });
+    if (hidden > 0) {
+      banner.style.display = 'block';
+      banner.innerHTML = `🆕 これから作る発注の分だけ表示中（過去の発注で済んだ ${hidden} 件は非表示）　`
+        + `<button class="secondary" id="btnShowAllPlan">過去の分も表示する</button>`;
+      document.getElementById('btnShowAllPlan').addEventListener('click', () => {
+        planShowAll = true;
+        renderPdfPins(gs);
+        renderTreeMarkerList(gs);
+      });
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }
   } else {
-    banner.style.display = 'none';
-    banner.innerHTML = '';
+    banner.style.display = 'block';
+    banner.innerHTML = `👁️ 過去の発注分も含めてすべて表示中　`
+      + `<button class="secondary" id="btnHidePastPlan">今回の発注分だけに戻す</button>`;
+    document.getElementById('btnHidePastPlan').addEventListener('click', () => {
+      planShowAll = false;
+      renderPdfPins(gs);
+      renderTreeMarkerList(gs);
+    });
   }
 
   // 草刈りエリア polygons (SVG stretched over the canvas; coordinates are % of canvas size)
@@ -5138,11 +5233,23 @@ function renderPdfPins(gs) {
 function renderMowAreaList(gs) {
   const wrap = document.getElementById('mowAreaList');
   ensureMowShape(gs);
-  if (gs.mowAreas.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">草刈りエリアはまだありません（図面で「🌿 配置図クリックで草刈りエリアを描く」から追加できます）</div>';
+  // 図面と同じ絞り込み（発注ごとに表示を切り替える）
+  let areas = gs.mowAreas;
+  const selRoundM = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
+  if (selRoundM) {
+    const ids = new Set();
+    (selRoundM.items || []).forEach(it => (it.areaRefs || []).forEach(id => ids.add(id)));
+    areas = areas.filter(a => ids.has(a.id));
+  } else if (!planShowAll) {
+    areas = areas.filter(a => !a.consumedBy);
+  }
+  if (areas.length === 0) {
+    wrap.innerHTML = gs.mowAreas.length === 0
+      ? '<div class="empty-msg">草刈りエリアはまだありません（図面で「🌿 配置図クリックで草刈りエリアを描く」から追加できます）</div>'
+      : '<div class="empty-msg">この発注に含まれる草刈りエリアはありません</div>';
     return;
   }
-  wrap.innerHTML = gs.mowAreas.map(a => `
+  wrap.innerHTML = areas.map(a => `
     <div class="work-row wr-mow" data-mow-row="${a.id}">
       <span class="work-type-badge">🌿草刈り</span>
       <strong>${escapeHtml(a.label)}</strong>
@@ -5300,11 +5407,23 @@ function renderMowAreaList(gs) {
 function renderRepairList(gs) {
   const wrap = document.getElementById('repairList');
   ensureRepairShape(gs);
-  if (gs.repairSpots.length === 0) {
-    wrap.innerHTML = '<div class="empty-msg">修繕箇所はまだありません（図面で「🔧 配置図クリックで修繕箇所を追加」から追加できます）</div>';
+  // 図面と同じ絞り込み（発注ごとに表示を切り替える）
+  let spots = gs.repairSpots;
+  const selRoundR = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
+  if (selRoundR) {
+    const ids = new Set();
+    (selRoundR.items || []).forEach(it => (it.repairRefs || []).forEach(id => ids.add(id)));
+    spots = spots.filter(s => ids.has(s.id));
+  } else if (!planShowAll) {
+    spots = spots.filter(s => !s.consumedBy);
+  }
+  if (spots.length === 0) {
+    wrap.innerHTML = gs.repairSpots.length === 0
+      ? '<div class="empty-msg">修繕箇所はまだありません（図面で「🔧 配置図クリックで修繕箇所を追加」から追加できます）</div>'
+      : '<div class="empty-msg">この発注に含まれる修繕箇所はありません</div>';
     return;
   }
-  wrap.innerHTML = gs.repairSpots.map(s => `
+  wrap.innerHTML = spots.map(s => `
     <div class="work-row wr-repair" data-repair-row="${s.id}">
       <span class="work-type-badge">🔧修繕</span>
       <strong>${escapeHtml(s.label)}</strong>
@@ -5851,6 +5970,46 @@ document.getElementById('summaryYearSelect').addEventListener('change', (e) => {
   renderSummary();
 });
 
+// 全緑地の発注を1つの表にまとめた「作業ごとの進捗一覧」（予算・見積額・進捗つき）
+function buildAllWorksTableHtml(y) {
+  const rows = [];
+  data.forEach(gs => {
+    const yearRecs = (gs.records || []).filter(r => String(r.year) === String(y))
+      .sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
+    yearRecs.forEach((r, i) => {
+      normalizeItemBudgets(r);
+      rows.push({ gs, r, no: i + 1 });
+    });
+  });
+  if (rows.length === 0) {
+    return `<h3 style="margin:18px 0 6px;">🗂️ 作業（発注）ごとの進捗一覧（${y}年度）</h3>
+      <div class="empty-msg">この年度の発注はまだありません</div>`;
+  }
+  // 進捗が進んでいないものを上に（調査中・見積もり中を優先して表示）
+  const order = (st) => { const i = statuses.indexOf(st); return i === -1 ? 999 : i; };
+  rows.sort((a, b) => order(a.r.status) - order(b.r.status)
+    || (a.r.date || '9999-99-99').localeCompare(b.r.date || '9999-99-99'));
+  const total = rows.reduce((s, x) => s + Number(x.r.cost || 0), 0);
+  return `<h3 style="margin:18px 0 6px;">🗂️ 作業（発注）ごとの進捗一覧（${y}年度）</h3>
+    <table><tr>
+      <th>緑地名</th><th>発注</th><th>実施日</th><th>作業内容</th><th>見積額</th><th>予算</th><th>進捗</th><th></th>
+    </tr>` + rows.map(x => `
+      <tr class="${x.r.status === FINAL_STATUS ? 'row-complete' : ''}">
+        <td><strong>${escapeHtml(x.gs.name)}</strong></td>
+        <td>${x.no}回目</td>
+        <td>${escapeHtml(x.r.date || '-')}</td>
+        <td>${roundItemsSummary(x.gs, x.r)}</td>
+        <td>¥${Number(x.r.cost || 0).toLocaleString()}</td>
+        <td>${escapeHtml(recordBudgetSummary(x.r))}${recordHasEnvTax(x.r) ? '<br><span class="env-tax-badge">🌲 環境譲与税</span>' : ''}</td>
+        <td>${escapeHtml(x.r.status || '-')}${x.r.status === FINAL_STATUS ? ' <span class="complete-badge">✅</span>' : ''}</td>
+        <td><button data-open="${x.gs.id}">開く</button></td>
+      </tr>
+    `).join('') + `<tr style="background:#e8f5e9; font-weight:bold;">
+      <td colspan="4" style="text-align:right;">全緑地の発注 合計（${rows.length}件）</td>
+      <td>¥${total.toLocaleString()}</td><td colspan="3"></td>
+    </tr></table>`;
+}
+
 function renderSummary() {
   const y = summarySelectedYear;
 
@@ -5959,7 +6118,7 @@ function renderSummary() {
       <td>${row.envSpent > 0 ? `<span class="env-tax-badge">🌲 ¥${row.envSpent.toLocaleString()}</span>` : '-'}</td>
       <td><button data-open="${row.gs.id}">開く</button></td>
     </tr>
-  `).join('') + `</table>`;
+  `).join('') + `</table>` + buildAllWorksTableHtml(y);
 
   wrap.querySelectorAll('button[data-open]').forEach(btn => {
     btn.addEventListener('click', () => {
