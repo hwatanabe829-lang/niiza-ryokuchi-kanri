@@ -755,6 +755,17 @@
   }
   .work-row.wr-fell { border-left-color: #c62828; }   /* 🪓伐採=赤 */
   .work-row.wr-prune { border-left-color: #1565c0; }  /* ✂️剪定=青 */
+  /* 発注済み（終わった作業）をまとめる折りたたみ。開けばいつでも中身を確認できる */
+  .done-group { margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; background: #f5f5f5; }
+  .done-group > summary {
+    cursor: pointer;
+    padding: 7px 10px;
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #555;
+  }
+  .done-group[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .done-group > .tree-card, .done-group > .work-row { margin-left: 6px; margin-right: 6px; }
   .work-row.wr-mow { border-left-color: #558b2f; }    /* 🌿草刈り=緑 */
   .work-row.wr-repair { border-left-color: #ef6c00; } /* 🔧修繕=オレンジ */
   .plan-legend {
@@ -983,7 +994,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16t</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16u</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1003,7 +1014,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-21c</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-26a</p>
   </div>
 </div>
 
@@ -1116,7 +1127,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16t</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16u</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -2350,23 +2361,27 @@ function renderTreeMarkerList(gs) {
   const wrap = document.getElementById('treeMarkerList');
   let list = (gs.treeMarkers || []).map(normalizeTreeMarker);
   const allTotal = list.length;
-  // 図面と同じ絞り込み: 発注を選んでいればその発注の木だけ、
-  // 新しい発注を作っている最中は、まだどの発注にも入っていない木だけを出す
+  // 発注を選んでいるときは、その発注に含まれる木だけを出す
   const selRound = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
   if (selRound) {
     const ids = new Set();
     (selRound.items || []).forEach(it => (it.workRefs || []).forEach(ref => ids.add(ref.treeId)));
     list = list.filter(t => ids.has(t.id));
-  } else if (!planShowAll) {
-    list = list.filter(t => (t.works || []).some(w => !w.consumedBy));
   }
-  if (list.length === 0) {
+  // 発注を選んでいないときは、未発注を上に、発注済み（作業が終わったもの）は
+  // 下に折りたたんで表示する。図面はまっさらでも、一覧では終了分も必ず確認できる。
+  let doneList = [];
+  if (!selRound) {
+    doneList = list.filter(t => (t.works || []).length > 0 && (t.works || []).every(w => w.consumedBy));
+    list = list.filter(t => !doneList.includes(t));
+  }
+  if (list.length === 0 && doneList.length === 0) {
     wrap.innerHTML = allTotal === 0
       ? '<div class="empty-msg">伐採・剪定予定の木はまだ登録されていません</div>'
-      : '<div class="empty-msg">この発注に含まれる木はありません（過去の発注分は上の「過去の分も表示する」で確認できます）</div>';
+      : '<div class="empty-msg">この発注に含まれる木はありません</div>';
     return;
   }
-  wrap.innerHTML = list.map(t => `
+  const treeCardHtml = (t) => `
     <div class="tree-card">
       <div class="tree-card-header">
         <strong>${treeMarkerIconEmoji(t)} ${escapeHtml(t.label)}</strong>
@@ -2418,7 +2433,14 @@ function renderTreeMarkerList(gs) {
         `).join('') || '<div class="empty-msg">作業履歴はまだありません</div>'}
       </div>
     </div>
-  `).join('');
+  `;
+  wrap.innerHTML = (list.length
+      ? list.map(treeCardHtml).join('')
+      : '<div class="empty-msg">今回の発注に入れる木はまだありません（図面から追加できます）</div>')
+    + (doneList.length
+      ? `<details class="done-group"><summary>✅ 発注済みの木（${doneList.length}本）— 終わった作業もここで確認できます</summary>
+          ${doneList.map(treeCardHtml).join('')}</details>`
+      : '');
 
   // 🧮単価タグのタップで、その作業の単価計算の内訳を表示
   wrap.querySelectorAll('[data-work-calc]').forEach(tag => {
@@ -5385,23 +5407,27 @@ function renderPdfPins(gs) {
 function renderMowAreaList(gs) {
   const wrap = document.getElementById('mowAreaList');
   ensureMowShape(gs);
-  // 図面と同じ絞り込み（発注ごとに表示を切り替える）
+  // 発注を選んでいるときはその発注の分だけ。選んでいないときは
+  // 未発注を上に、発注済み（終わった作業）は下に折りたたんで必ず見られるようにする
   let areas = gs.mowAreas;
   const selRoundM = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
   if (selRoundM) {
     const ids = new Set();
     (selRoundM.items || []).forEach(it => (it.areaRefs || []).forEach(id => ids.add(id)));
     areas = areas.filter(a => ids.has(a.id));
-  } else if (!planShowAll) {
+  }
+  let doneAreas = [];
+  if (!selRoundM) {
+    doneAreas = areas.filter(a => a.consumedBy);
     areas = areas.filter(a => !a.consumedBy);
   }
-  if (areas.length === 0) {
+  if (areas.length === 0 && doneAreas.length === 0) {
     wrap.innerHTML = gs.mowAreas.length === 0
       ? '<div class="empty-msg">草刈りエリアはまだありません（図面で「🌿 配置図クリックで草刈りエリアを描く」から追加できます）</div>'
       : '<div class="empty-msg">この発注に含まれる草刈りエリアはありません</div>';
     return;
   }
-  wrap.innerHTML = areas.map(a => `
+  const mowRowHtml = (a) => `
     <div class="work-row wr-mow" data-mow-row="${a.id}">
       <span class="work-type-badge">🌿草刈り</span>
       <strong>${escapeHtml(a.label)}</strong>
@@ -5429,7 +5455,14 @@ function renderMowAreaList(gs) {
       ${a.photo ? `<img class="spot-photo-thumb" src="${a.photo}" data-mow-photo-view="${a.id}" title="タップで拡大">` : ''}
       <button class="danger" data-mow-del="${a.id}">削除</button>
     </div>
-  `).join('');
+  `;
+  wrap.innerHTML = (areas.length
+      ? areas.map(mowRowHtml).join('')
+      : '<div class="empty-msg">今回の発注に入れる草刈りエリアはまだありません</div>')
+    + (doneAreas.length
+      ? `<details class="done-group"><summary>✅ 発注済みの草刈りエリア（${doneAreas.length}件）</summary>
+          ${doneAreas.map(mowRowHtml).join('')}</details>`
+      : '');
   // エリアの状況写真: 📷で選択→縮小して保存。サムネイルのタップで拡大表示
   wrap.querySelectorAll('button[data-mow-photo-btn]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -5564,23 +5597,27 @@ function renderMowAreaList(gs) {
 function renderRepairList(gs) {
   const wrap = document.getElementById('repairList');
   ensureRepairShape(gs);
-  // 図面と同じ絞り込み（発注ごとに表示を切り替える）
+  // 発注を選んでいるときはその発注の分だけ。選んでいないときは
+  // 未発注を上に、発注済み（終わった作業）は下に折りたたんで必ず見られるようにする
   let spots = gs.repairSpots;
   const selRoundR = selectedRoundId ? (gs.records || []).find(r => r.id === selectedRoundId) : null;
   if (selRoundR) {
     const ids = new Set();
     (selRoundR.items || []).forEach(it => (it.repairRefs || []).forEach(id => ids.add(id)));
     spots = spots.filter(s => ids.has(s.id));
-  } else if (!planShowAll) {
+  }
+  let doneSpots = [];
+  if (!selRoundR) {
+    doneSpots = spots.filter(s => s.consumedBy);
     spots = spots.filter(s => !s.consumedBy);
   }
-  if (spots.length === 0) {
+  if (spots.length === 0 && doneSpots.length === 0) {
     wrap.innerHTML = gs.repairSpots.length === 0
       ? '<div class="empty-msg">修繕箇所はまだありません（図面で「🔧 配置図クリックで修繕箇所を追加」から追加できます）</div>'
       : '<div class="empty-msg">この発注に含まれる修繕箇所はありません</div>';
     return;
   }
-  wrap.innerHTML = spots.map(s => `
+  const repairRowHtml = (s) => `
     <div class="work-row wr-repair" data-repair-row="${s.id}">
       <span class="work-type-badge">🔧修繕</span>
       <strong>${escapeHtml(s.label)}</strong>
@@ -5599,7 +5636,14 @@ function renderRepairList(gs) {
       ${s.photo ? `<img class="spot-photo-thumb" src="${s.photo}" data-repair-photo-view="${s.id}" title="タップで拡大">` : ''}
       <button class="danger" data-repair-del="${s.id}">削除</button>
     </div>
-  `).join('');
+  `;
+  wrap.innerHTML = (spots.length
+      ? spots.map(repairRowHtml).join('')
+      : '<div class="empty-msg">今回の発注に入れる修繕箇所はまだありません</div>')
+    + (doneSpots.length
+      ? `<details class="done-group"><summary>✅ 発注済みの修繕箇所（${doneSpots.length}件）</summary>
+          ${doneSpots.map(repairRowHtml).join('')}</details>`
+      : '');
   wrap.querySelectorAll('input[data-repair-note]').forEach(inp => {
     inp.addEventListener('change', () => {
       const s = gs.repairSpots.find(x => x.id === inp.dataset.repairNote);
