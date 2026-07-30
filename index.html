@@ -994,7 +994,7 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16u</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16v</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
@@ -1014,7 +1014,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-26a</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-26b</p>
   </div>
 </div>
 
@@ -1127,7 +1127,7 @@
   <button class="close-btn" id="btnCloseDetail">✕</button>
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
-    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16u</span></button>
+    onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16v</span></button>
   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
@@ -1156,6 +1156,7 @@
       <input type="file" id="pdfUpload" accept="application/pdf,image/*">
       <small class="help" id="pdfFileName"></small>
     </div>
+    <div id="planPickHint" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:6px; padding:10px 12px; font-size:13px; color:#5d4037; line-height:1.7;"></div>
     <div class="editing-banner" id="roundFilterBanner"></div>
     <div class="editing-banner" id="treeMoveBanner" style="display:none;"></div>
     <div id="planZoomBar" style="display:none; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
@@ -1629,6 +1630,9 @@ let selectedRoundId = null; // record id whose site-plan trees are being isolate
 // 新しい発注を作るときの図面は、過去の発注で済んだ作業を隠して「まっさら」にする。
 // true にすると過去の分も含めてすべて表示する（確認したいとき用）
 let planShowAll = false;
+// 図面を表示中かどうか。緑地を開いた直後は出さず、「この発注の図面を見る」か
+// 「新しい発注を作成する」を押したときだけ表示する（何の図面か分かるように）
+let planVisible = false;
 let mowDrawMode = false;    // clicking the site plan adds vertices of a new 草刈りエリア polygon
 let mowDraftPoints = [];    // vertices (%) of the polygon being drawn
 let treeMoveTargetId = null; // 誤タップした木を敷地図タップで置き直すモード（現場スマホ向け）
@@ -3383,6 +3387,7 @@ function openDetail(id) {
   currentId = id;
   selectedRoundId = null;
   planShowAll = false; // 開いた直後は「これから作る発注」の図面（過去の分は隠す）
+  planVisible = false; // 図面は発注を選ぶまで出さない
   const gs = getGreen(id);
   if (!gs) return;
   if (gs.lat != null && gs.lng != null) {
@@ -4305,9 +4310,12 @@ function renderRoundTable(gs) {
     btn.addEventListener('click', () => {
       selectedRoundId = (selectedRoundId === btn.dataset.round) ? null : btn.dataset.round;
       planShowAll = false;
+      planVisible = !!selectedRoundId; // 選んだらその発注の図面を出す（解除したら閉じる）
       renderRoundTable(gs);
-      renderPdfPins(gs);
+      renderPdfSection(gs);
       renderTreeMarkerList(gs); // 木の一覧もこの発注の分だけに切り替える
+      renderMowAreaList(gs);
+      renderRepairList(gs);
       // 選んだ回の内容ボックスが見えるようスクロールする
       if (selectedRoundId) document.getElementById('roundSummaryBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
@@ -4316,8 +4324,9 @@ function renderRoundTable(gs) {
     btn.addEventListener('click', () => {
       // 図面にもこの回を表示してから、下のフォームへ内容を呼び出す
       selectedRoundId = btn.dataset.roundEdit;
+      planVisible = true;
       renderRoundTable(gs);
-      renderPdfPins(gs);
+      renderPdfSection(gs);
       editRecord(gs, btn.dataset.roundEdit);
     });
   });
@@ -4436,10 +4445,11 @@ document.getElementById('btnNewRound').addEventListener('click', () => {
   if (editingRecordId) document.getElementById('btnCancelEdit').click();
   selectedRoundId = null;               // 図面の「特定の発注だけ表示」を解除
   planShowAll = false;                  // 図面を「まっさら（未発注の分だけ）」に戻す
+  planVisible = true;                   // 新しい発注用のまっさらな図面を出す
   resetRecordForm();
   const nextNo = (gs.records.filter(r => String(r.year) === String(gs.selectedYear)).length) + 1;
   renderRoundTable(gs);
-  renderPdfPins(gs);
+  renderPdfSection(gs);
   renderTreeMarkerList(gs);
   renderMowAreaList(gs);
   renderRepairList(gs);
@@ -4515,9 +4525,12 @@ function renderRoundSummary(gs) {
   });
   document.getElementById('btnRoundSummaryClose').addEventListener('click', () => {
     selectedRoundId = null;
+    planVisible = false; // 選択を解除したら図面も閉じる
     renderRoundTable(gs);
-    renderPdfPins(gs);
+    renderPdfSection(gs);
     renderTreeMarkerList(gs);
+    renderMowAreaList(gs);
+    renderRepairList(gs);
   });
 }
 
@@ -4829,6 +4842,7 @@ document.getElementById('pdfUpload').addEventListener('change', async (e) => {
   gs.pdfPhotoId = registerPhoto(gs, dataUrl);
   if (!gs.pdfPins) gs.pdfPins = [];
   save();
+  planVisible = true; // アップロードした直後は、確認できるよう図面を表示する
   renderPdfSection(gs);
   renderGreenList();
 });
@@ -4986,6 +5000,23 @@ function renderPdfSection(gs) {
   planZoom = 1;
   if (planFullscreen) setPlanFullscreen(false); // 緑地を開き直したら全画面は解除
   applyPlanZoom();
+
+  const hintEl = document.getElementById('planPickHint');
+  // どの発注の図面かをはっきりさせるため、図面は「発注を選んだとき」か
+  // 「新しい発注を作るとき」だけ出す（何の図面か分からなくなる混乱を防ぐ）
+  if (!planVisible) {
+    fileNameEl.textContent = gs.pdf ? ('登録済み: ' + (gs.pdfName || 'ファイル')) : '';
+    holder.style.display = 'none';
+    controls.style.display = 'none';
+    zoomBar.style.display = 'none';
+    if (hintEl) {
+      hintEl.style.display = 'block';
+      hintEl.innerHTML = '👆 上の「🗂️ 発注の一覧」で<b>「📍 この発注の図面を見る」</b>を押すか、'
+        + '<b>「➕ 新しい発注を作成する」</b>を押すと、その発注の図面がここに表示されます。';
+    }
+    return;
+  }
+  if (hintEl) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; }
 
   if (!gs.pdf) {
     fileNameEl.textContent = '';
@@ -5216,6 +5247,9 @@ function renderPdfPins(gs) {
       selectedRoundId = null;
       renderRoundTable(gs);
       renderPdfPins(gs);
+      renderTreeMarkerList(gs);
+      renderMowAreaList(gs);
+      renderRepairList(gs);
     });
   } else if (!planShowAll) {
     // 発注を選んでいない＝新しい発注を作っている状態。
