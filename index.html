@@ -987,6 +987,308 @@
     .mow-area-label { font-size: 10px; padding: 1px 6px; }
     .tree-card-header { flex-wrap: wrap; gap: 6px; }
   }
+
+  /* SIMPLE_UI_V17A_START
+     普段使いを「緑地を選ぶ → 状況を見る → 進捗を変える」に絞った簡易表示。
+     元の詳細機能は削除せず、詳細管理へ切り替えれば従来どおり利用できる。 */
+  #btnToggleSimpleMode {
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.65);
+    white-space: nowrap;
+  }
+  #simpleDetailOverview { display: none; }
+  #simpleBottomNav { display: none; }
+  body.simple-ui header .hint,
+  body.simple-ui #btnOpenSummary { display: none; }
+  body.simple-ui #sidebar { width: 290px; }
+  body.simple-ui #sidebar .panel-section { display: none; }
+  body.simple-ui #sidebar #greenPanel { display: block; border-bottom: none; }
+  body.simple-ui #greenPanel .add-btn,
+  body.simple-ui #greenPanel > small.help { display: none; }
+  body.simple-ui #greenPanel h2 {
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+  body.simple-ui .green-item {
+    padding: 11px 12px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  body.simple-ui .green-item .name { font-size: 14px; }
+  body.simple-ui #detail {
+    width: min(500px, 48vw);
+    padding: 16px;
+  }
+  body.simple-ui #detail > :not(.close-btn):not(.drawer-close-bar):not(#detailTitleRow):not(#simpleDetailOverview) {
+    display: none !important;
+  }
+  body.simple-ui #detailTitleRow #btnRenameGreen { display: none; }
+  body.simple-ui #simpleDetailOverview { display: block; }
+  .simple-year-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 10px 12px;
+    background: #f4f7f4;
+    border-radius: 9px;
+  }
+  .simple-year-row label { font-size: 13px; color: #555; font-weight: bold; }
+  .simple-year-row select {
+    margin-left: auto;
+    min-width: 120px;
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #fff;
+    font-size: 14px;
+  }
+  .simple-next-card {
+    border: 1px solid #c8e6c9;
+    background: #f1f8e9;
+    border-radius: 12px;
+    padding: 13px 14px;
+    margin-bottom: 14px;
+  }
+  .simple-next-card.none {
+    border-color: #ddd;
+    background: #fafafa;
+    color: #666;
+  }
+  .simple-next-label {
+    font-size: 11px;
+    color: #557;
+    font-weight: bold;
+    letter-spacing: .03em;
+    margin-bottom: 5px;
+  }
+  .simple-next-main { font-size: 16px; font-weight: bold; color: #1b5e20; }
+  .simple-next-sub { font-size: 12px; color: #555; margin-top: 5px; line-height: 1.5; }
+  .simple-section-title {
+    font-size: 14px;
+    margin: 14px 0 8px;
+    color: #1b5e20;
+  }
+  .simple-work-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 11px 12px;
+    margin-bottom: 8px;
+    background: #fff;
+  }
+  .simple-work-card.done { background: #f7faf7; }
+  .simple-work-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .simple-work-date { font-weight: bold; font-size: 14px; }
+  .simple-state {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    background: #fff3cd;
+    color: #7a5b00;
+  }
+  .simple-state.done { background: #dcedc8; color: #33691e; }
+  .simple-work-body { font-size: 12px; color: #444; line-height: 1.5; margin-bottom: 8px; }
+  .simple-work-actions {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .simple-work-actions select {
+    flex: 1;
+    min-width: 150px;
+    padding: 7px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    background: #fff;
+    font-size: 13px;
+  }
+  .simple-work-actions button { min-height: 34px; padding: 6px 10px; }
+  .simple-empty {
+    padding: 18px 12px;
+    text-align: center;
+    color: #777;
+    background: #fafafa;
+    border: 1px dashed #ccc;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  #btnSimpleAdvanced {
+    width: 100%;
+    margin-top: 14px;
+    background: #fff;
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-weight: bold;
+  }
+  #simpleBottomNav {
+    position: fixed;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    z-index: 1800;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid #d7d7d7;
+    border-radius: 14px;
+    padding: 5px;
+    gap: 4px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.16);
+  }
+  body.simple-ui #simpleBottomNav { display: flex; }
+  #simpleBottomNav button {
+    min-width: 120px;
+    border-radius: 10px;
+    padding: 9px 14px;
+    background: #fff;
+    color: #555;
+    border: none;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  #simpleBottomNav button.active {
+    background: var(--green);
+    color: #fff;
+  }
+  body.simple-ui .layout { margin-bottom: 62px; }
+
+  #annualOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    background: rgba(0,0,0,.5);
+    align-items: flex-start;
+    justify-content: center;
+    overflow: auto;
+    padding: 24px 12px 90px;
+  }
+  .annual-card {
+    width: min(1180px, 100%);
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  }
+  .annual-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .annual-head h2 {
+    margin: 0;
+    color: var(--green);
+    font-size: 19px;
+  }
+  .annual-head select {
+    margin-left: auto;
+    padding: 7px 10px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    background: #fff;
+  }
+  .annual-head button { min-width: 42px; }
+  .annual-scroll { overflow-x: auto; }
+  .annual-table { min-width: 900px; font-size: 12px; }
+  .annual-table th { text-align: center; white-space: nowrap; }
+  .annual-table td { text-align: center; height: 42px; }
+  .annual-table td:first-child {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 1;
+    min-width: 170px;
+  }
+  .annual-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 27px;
+    height: 27px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-weight: bold;
+    background: #fff3cd;
+    color: #7a5b00;
+  }
+  .annual-dot.done { background: #dcedc8; color: #33691e; }
+  .annual-green-link {
+    background: none;
+    color: #1b5e20;
+    font-weight: bold;
+    padding: 2px 0;
+    min-height: 0;
+    text-align: left;
+  }
+  .annual-legend { font-size: 12px; color: #666; margin: 6px 0 10px; }
+
+  @media (max-width: 640px) {
+    body.simple-ui header {
+      padding: 7px 8px;
+      gap: 4px 6px;
+    }
+    body.simple-ui header h1 { flex: 1 1 145px; }
+    body.simple-ui #syncBadge { display: none; }
+    body.simple-ui #btnRefreshData,
+    body.simple-ui #btnToggleSimpleMode {
+      min-height: 32px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    body.simple-ui #sidebar {
+      width: 100%;
+      height: 155px;
+    }
+    body.simple-ui #sidebar.collapsed { height: 0; }
+    body.simple-ui #greenPanel { padding: 8px 10px; }
+    body.simple-ui #greenPanel h2 { margin-bottom: 6px; font-size: 14px; }
+    body.simple-ui .green-item {
+      display: inline-block;
+      width: min(260px, calc(100vw - 32px));
+      margin: 0 6px 6px 0;
+      vertical-align: top;
+      padding: 8px 10px;
+    }
+    body.simple-ui #greenList {
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+    }
+    body.simple-ui .green-item .sub { white-space: normal; }
+    body.simple-ui #detail {
+      width: 100% !important;
+      height: 82dvh !important;
+      padding: 32px 12px 76px !important;
+    }
+    body.simple-ui #detailTitleRow { margin-top: 4px; }
+    body.simple-ui .simple-work-actions select { width: 100%; flex-basis: 100%; font-size: 16px; }
+    body.simple-ui #simpleBottomNav {
+      bottom: max(8px, env(safe-area-inset-bottom));
+      width: calc(100% - 20px);
+      max-width: 430px;
+    }
+    #simpleBottomNav button { flex: 1; min-width: 0; min-height: 42px; }
+    .annual-card { padding: 13px; border-radius: 10px; }
+    .annual-head { align-items: flex-start; flex-wrap: wrap; }
+    .annual-head h2 { width: 100%; }
+    .annual-head select { margin-left: 0; flex: 1; font-size: 16px; }
+  }
+  /* SIMPLE_UI_V17A_END */
+
 </style>
 </head>
 <body>
@@ -994,9 +1296,10 @@
 <header>
   <h1>🌳 新座市 緑地管理システム</h1>
   <span id="sectionBadge" style="background:rgba(255,255,255,0.25); padding:2px 12px; border-radius:12px; font-size:13px; font-weight:bold; display:none;"></span>
-  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版16v</span></div>
+  <div class="hint">左の「➕ 新しい緑地を作成」から登録できます <span style="opacity:0.6; font-size:10px;">版17a</span></div>
   <span id="syncBadge" title="クラウド保存の状態"></span>
   <button class="outline" id="btnRefreshData" title="他の職員の入力を取り込みます">🔄 更新</button>
+  <button id="btnToggleSimpleMode" type="button">⚙ 詳細管理</button>
   <button class="outline" id="btnOpenSummary">📊 全体サマリ</button>
   <button class="outline" id="btnLogout" style="display:none;">ログアウト</button>
 </header>
@@ -1014,7 +1317,7 @@
       <button type="submit">ログイン</button>
       <div id="loginError" style="color:#ffcdd2; font-size:13px; margin-top:8px; display:none;"></div>
     </form>
-    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-07-26b</p>
+    <p class="login-note">データは係ごとに分かれてクラウドに保存され、同じ係の職員間で共有されます。<br>版: 2026-10-07a</p>
   </div>
 </div>
 
@@ -1048,7 +1351,7 @@
       </div>
       <button id="btnSetEnvTaxBudget" style="width:100%;">設定/更新</button>
     </div>
-    <div class="panel-section">
+    <div class="panel-section" id="greenPanel">
       <h2>緑地一覧</h2>
       <button class="add-btn" id="btnAddMode">➕ 新しい緑地を作成</button>
       <small class="help" style="margin:0 0 6px;">作成後、地図上のピンをつかんで動かすと位置を調整できます。</small>
@@ -1128,9 +1431,20 @@
   <!-- onclick直書き: 他のスクリプトの状態に関係なく必ず閉じられるようにする -->
   <button class="drawer-close-bar" id="drawerCloseBar" type="button"
     onclick="var d=document.getElementById('detail'); d.classList.remove('open'); d.style.setProperty('display','none','important'); if (window.closeDetailPanel) closeDetailPanel();">✕ 閉じて地図に戻る <span style="font-size:10px; color:#999; font-weight:normal;">v16v</span></button>
-  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+  <div id="detailTitleRow" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <h2 id="detailName" style="margin:0;">緑地名</h2>
     <button class="outline" id="btnRenameGreen" title="緑地名を変更" style="min-height:0; padding:4px 10px; font-size:13px;">✏️ 名前変更</button>
+  </div>
+
+  <div id="simpleDetailOverview">
+    <div class="simple-year-row">
+      <label for="simpleYearSelect">表示年度</label>
+      <select id="simpleYearSelect"></select>
+    </div>
+    <div id="simpleNextWork"></div>
+    <h3 class="simple-section-title">作業・発注の状況</h3>
+    <div id="simpleWorkList"></div>
+    <button id="btnSimpleAdvanced" type="button">⚙ 図面・予算・発注内容など詳細管理を開く</button>
   </div>
 
   <div class="year-bar">
@@ -1300,6 +1614,24 @@
   <button id="btnAddRecord" style="margin-top:10px; width:100%; display:none;">💾 この発注を上書き保存</button>
   <button class="secondary" id="btnCancelEdit" style="display:none;">編集をキャンセル</button>
 </div>
+
+
+<div id="annualOverlay">
+  <div class="annual-card">
+    <div class="annual-head">
+      <h2>📅 年間一覧</h2>
+      <select id="annualYearSelect" aria-label="対象年度"></select>
+      <button class="outline" id="btnCloseAnnual" type="button">✕</button>
+    </div>
+    <div class="annual-legend">● 作業完了　△ 進行中・予定　数字はその月の件数</div>
+    <div class="annual-scroll" id="annualTableWrap"></div>
+  </div>
+</div>
+
+<nav id="simpleBottomNav" aria-label="かんたん表示メニュー">
+  <button id="btnSimpleMap" class="active" type="button">🗺️ 地図</button>
+  <button id="btnSimpleAnnual" type="button">📅 年間一覧</button>
+</nav>
 
 <div class="modal-overlay" id="photoModal">
   <img id="photoModalImg">
@@ -2758,12 +3090,22 @@ function renderGreenList() {
   data.forEach(gs => {
     const div = document.createElement('div');
     div.className = 'green-item' + (gs.id === currentId ? ' active' : '');
-    const totalSpent = gs.records.reduce((s, r) => s + Number(r.cost || 0), 0);
-    const latest = gs.records.slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''))[0];
+    const totalSpent = (gs.records || []).reduce((s, r) => s + Number(r.cost || 0), 0);
+    const latest = (gs.records || []).slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''))[0];
     const mowAlert = season && !isMowDone(gs, season, seasonYear) ? ' <span class="mow-badge">🌿要草刈り</span>' : '';
-    div.innerHTML = `<div class="name">${escapeHtml(gs.name)} ${gs.pdf ? '📄' : ''}${mowAlert}</div>
-      <div class="sub">記録数: ${gs.records.length}件 / 総支出: ¥${totalSpent.toLocaleString()}</div>
-      ${latest ? `<div class="sub">最新: <span class="status-badge">${escapeHtml(latest.status||'-')}</span></div>` : ''}`;
+    if (document.body.classList.contains('simple-ui')) {
+      const y = Number(gs.selectedYear || simpleFiscalYearNow());
+      const yr = (gs.records || []).filter(r => String(r.year) === String(y));
+      const pending = yr.filter(r => !simpleWorkDone(r.status));
+      const next = pending.slice().sort((a,b)=> (a.date||'9999-99-99').localeCompare(b.date||'9999-99-99'))[0];
+      div.innerHTML = `<div class="name">${escapeHtml(gs.name)}${mowAlert}</div>
+        <div class="sub">${y}年度：未完了 ${pending.length}件 / 全${yr.length}件</div>
+        ${next ? `<div class="sub">次：${escapeHtml(next.date || '日付未定')}　<span class="status-badge">${escapeHtml(next.status || '-')}</span></div>` : '<div class="sub">未完了の作業なし ✅</div>'}`;
+    } else {
+      div.innerHTML = `<div class="name">${escapeHtml(gs.name)} ${gs.pdf ? '📄' : ''}${mowAlert}</div>
+        <div class="sub">記録数: ${(gs.records || []).length}件 / 総支出: ¥${totalSpent.toLocaleString()}</div>
+        ${latest ? `<div class="sub">最新: <span class="status-badge">${escapeHtml(latest.status||'-')}</span></div>` : ''}`;
+    }
     div.addEventListener('click', () => {
       openDetail(gs.id);
     });
@@ -3421,6 +3763,7 @@ function openDetail(id) {
   renderRepairList(gs);    // 修繕箇所も同様
   document.getElementById('greenTotalArea').value = formatAmountInput(gs.totalArea);
   renderGreenList();
+  renderSimpleDetail(gs);
   // 写真・敷地図はこの緑地の分だけ後から読み込み、届いたら再描画する（起動と一覧を軽く保つ）
   if (!gs.__photosLoaded) {
     loadPhotosForGreen(gs).then(() => {
@@ -6573,6 +6916,224 @@ document.getElementById('btnRefreshData').addEventListener('click', async () => 
     btn.textContent = '🔄 更新';
   }
 });
+
+
+// ============================================================
+// 版17a: かんたん表示（地図 / 緑地状況 / 年間一覧）
+// ============================================================
+const SIMPLE_UI_KEY = 'niiza_simple_ui_v17a';
+
+function simpleFiscalYearNow() {
+  const d = new Date();
+  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+function simpleStatusRank(status) {
+  const i = statuses.indexOf(status);
+  return i < 0 ? -1 : i;
+}
+
+function simpleWorkDone(status) {
+  const doneAt = statuses.indexOf('施工完了');
+  const rank = simpleStatusRank(status);
+  if (status === FINAL_STATUS) return true;
+  return doneAt >= 0 && rank >= doneAt;
+}
+
+function setSimpleMode(enabled, persist = true) {
+  document.body.classList.toggle('simple-ui', !!enabled);
+  const btn = document.getElementById('btnToggleSimpleMode');
+  if (btn) btn.textContent = enabled ? '⚙ 詳細管理' : '← かんたん表示';
+  if (persist) localStorage.setItem(SIMPLE_UI_KEY, enabled ? '1' : '0');
+  if (enabled && currentId) {
+    const gs = getGreen(currentId);
+    if (gs) renderSimpleDetail(gs);
+  }
+  setTimeout(() => {
+    try { map.invalidateSize(); } catch (_) {}
+  }, 80);
+}
+
+function simpleYearOptions(gs) {
+  const years = new Set((gs.years || []).map(Number));
+  (gs.records || []).forEach(r => { if (r.year != null) years.add(Number(r.year)); });
+  years.add(simpleFiscalYearNow());
+  return Array.from(years).filter(Number.isFinite).sort((a,b) => b-a);
+}
+
+function renderSimpleDetail(gs) {
+  const wrap = document.getElementById('simpleDetailOverview');
+  if (!wrap || !gs) return;
+  const years = simpleYearOptions(gs);
+  let y = Number(gs.selectedYear);
+  if (!years.includes(y)) y = years[0];
+
+  const sel = document.getElementById('simpleYearSelect');
+  sel.innerHTML = years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}年度</option>`).join('');
+
+  const recs = (gs.records || []).filter(r => String(r.year) === String(y))
+    .slice().sort((a,b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'));
+  const pending = recs.filter(r => !simpleWorkDone(r.status));
+  const next = pending[0];
+
+  const nextEl = document.getElementById('simpleNextWork');
+  if (next) {
+    nextEl.innerHTML = `<div class="simple-next-card">
+      <div class="simple-next-label">次に確認する作業</div>
+      <div class="simple-next-main">${escapeHtml(next.date || '日付未定')}　${escapeHtml(next.status || '-')}</div>
+      <div class="simple-next-sub">${roundItemsSummary(gs, next)}</div>
+    </div>`;
+  } else {
+    nextEl.innerHTML = `<div class="simple-next-card none">
+      <div class="simple-next-label">次に確認する作業</div>
+      <div><b>未完了の作業はありません ✅</b></div>
+      <div class="simple-next-sub">${y}年度の登録済み作業は ${recs.length}件です。</div>
+    </div>`;
+  }
+
+  const list = document.getElementById('simpleWorkList');
+  if (!recs.length) {
+    list.innerHTML = '<div class="simple-empty">この年度の作業・発注はまだありません。<br>新規登録は「詳細管理」から行えます。</div>';
+  } else {
+    list.innerHTML = recs.map(r => {
+      const done = simpleWorkDone(r.status);
+      const statusOptions = statuses.map(st => `<option value="${escapeHtml(st)}" ${st === r.status ? 'selected' : ''}>${escapeHtml(st)}</option>`).join('');
+      const finishBtn = !done && statuses.includes('施工完了')
+        ? `<button type="button" data-simple-finish="${r.id}">✅ 施工完了</button>`
+        : '';
+      return `<div class="simple-work-card ${done ? 'done' : ''}">
+        <div class="simple-work-top">
+          <span class="simple-work-date">${escapeHtml(r.date || '日付未定')}</span>
+          <span class="simple-state ${done ? 'done' : ''}">${escapeHtml(r.status || '-')}</span>
+        </div>
+        <div class="simple-work-body">${roundItemsSummary(gs, r)}</div>
+        <div class="simple-work-actions">
+          <select data-simple-status="${r.id}" aria-label="進捗状況">${statusOptions}</select>
+          ${finishBtn}
+          <button class="outline" type="button" data-simple-edit="${r.id}">詳細編集</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-simple-status]').forEach(el => {
+      el.addEventListener('change', () => {
+        const r = (gs.records || []).find(x => x.id === el.dataset.simpleStatus);
+        if (!r) return;
+        r.status = el.value;
+        save();
+        renderSimpleDetail(gs);
+        renderGreenList();
+      });
+    });
+    list.querySelectorAll('[data-simple-finish]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const r = (gs.records || []).find(x => x.id === btn.dataset.simpleFinish);
+        if (!r) return;
+        if (!confirm('この作業を「施工完了」にしますか？')) return;
+        r.status = '施工完了';
+        save();
+        renderSimpleDetail(gs);
+        renderGreenList();
+      });
+    });
+    list.querySelectorAll('[data-simple-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setSimpleMode(false);
+        editRecord(gs, btn.dataset.simpleEdit);
+        setTimeout(() => document.getElementById('recordFormHeading')?.scrollIntoView({behavior:'smooth', block:'start'}), 80);
+      });
+    });
+  }
+
+  sel.onchange = () => {
+    gs.selectedYear = Number(sel.value);
+    save();
+    renderYearSelect(gs);
+    renderBudgetCard(gs);
+    renderRecordTable(gs);
+    renderSimpleDetail(gs);
+    renderGreenList();
+  };
+}
+
+function renderAnnualOverview() {
+  const sel = document.getElementById('annualYearSelect');
+  if (!sel) return;
+  const y = Number(sel.value || simpleFiscalYearNow());
+  const months = [4,5,6,7,8,9,10,11,12,1,2,3];
+  const head = months.map(m => `<th>${m}月</th>`).join('');
+  const rows = data.slice().sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), 'ja')).map(gs => {
+    const recs = (gs.records || []).filter(r => String(r.year) === String(y));
+    const cells = months.map(m => {
+      const inMonth = recs.filter(r => {
+        if (!r.date) return false;
+        const mm = Number(String(r.date).slice(5,7));
+        return mm === m;
+      });
+      if (!inMonth.length) return '<td></td>';
+      const done = inMonth.every(r => simpleWorkDone(r.status));
+      const mark = done ? '●' : '△';
+      const title = inMonth.map(r => `${r.date || '日付未定'} ${r.status || '-'}`).join(' / ');
+      return `<td title="${escapeHtml(title)}"><span class="annual-dot ${done ? 'done' : ''}">${mark}${inMonth.length > 1 ? inMonth.length : ''}</span></td>`;
+    }).join('');
+    return `<tr>
+      <td><button class="annual-green-link" data-annual-open="${gs.id}">${escapeHtml(gs.name)}</button></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('annualTableWrap').innerHTML = data.length
+    ? `<table class="annual-table"><tr><th>緑地</th>${head}</tr>${rows}</table>`
+    : '<div class="simple-empty">緑地がまだ登録されていません。</div>';
+
+  document.querySelectorAll('[data-annual-open]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gs = getGreen(btn.dataset.annualOpen);
+      if (gs) gs.selectedYear = y;
+      document.getElementById('annualOverlay').style.display = 'none';
+      document.getElementById('btnSimpleAnnual').classList.remove('active');
+      document.getElementById('btnSimpleMap').classList.add('active');
+      openDetail(btn.dataset.annualOpen);
+    });
+  });
+}
+
+function openAnnualOverview() {
+  const years = allYearsAcrossData();
+  const fy = simpleFiscalYearNow();
+  const current = years.includes(fy) ? fy : years[0];
+  const sel = document.getElementById('annualYearSelect');
+  const prev = Number(sel.value);
+  const y = years.includes(prev) ? prev : current;
+  sel.innerHTML = years.map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}年度</option>`).join('');
+  renderAnnualOverview();
+  document.getElementById('annualOverlay').style.display = 'flex';
+  document.getElementById('btnSimpleMap').classList.remove('active');
+  document.getElementById('btnSimpleAnnual').classList.add('active');
+}
+
+document.getElementById('btnToggleSimpleMode').addEventListener('click', () => {
+  setSimpleMode(!document.body.classList.contains('simple-ui'));
+});
+document.getElementById('btnSimpleAdvanced').addEventListener('click', () => setSimpleMode(false));
+document.getElementById('btnSimpleAnnual').addEventListener('click', openAnnualOverview);
+document.getElementById('btnSimpleMap').addEventListener('click', () => {
+  document.getElementById('annualOverlay').style.display = 'none';
+  document.getElementById('summaryOverlay').style.display = 'none';
+  document.getElementById('btnSimpleAnnual').classList.remove('active');
+  document.getElementById('btnSimpleMap').classList.add('active');
+  if (currentId) closeDetailPanel();
+});
+document.getElementById('btnCloseAnnual').addEventListener('click', () => {
+  document.getElementById('annualOverlay').style.display = 'none';
+  document.getElementById('btnSimpleAnnual').classList.remove('active');
+  document.getElementById('btnSimpleMap').classList.add('active');
+});
+document.getElementById('annualYearSelect').addEventListener('change', renderAnnualOverview);
+
+// 初回は必ずかんたん表示。利用者が詳細管理へ切り替えた場合だけ端末ごとに保持する。
+setSimpleMode(localStorage.getItem(SIMPLE_UI_KEY) !== '0', false);
+
 
 if (window.fb) initFirebase();
 else window.addEventListener('fb-ready', initFirebase);
